@@ -53,6 +53,13 @@ Unlike heavy modern utilities wrapped in Electron or Chromium that devour hundre
 * **Quick Scratchpad**: Write quick to-dos and thoughts directly on Glance without opening heavy text editors.
 * **Clipboard History**: Automatically logs copied text snippets with timestamps, copy-back buttons, deletion, and pin-to-top favoriting.
 
+### 🖥️ 8. Multi-Monitor & Dual-Display Support
+* **Layar 1 Saja (Primary Display)**: Run Glance on your main monitor.
+* **Layar 2 Saja (Secondary Display)**: Move Glance to your secondary monitor.
+* **Kedua Layar (Both Screens)**: Run synchronized dynamic islands on both monitors simultaneously, sharing media playback, live waveform, and hardware telemetry with zero extra CPU/RAM overhead (~20 MB total).
+* **Cursor-Aware Glance Search**: `Ctrl + Shift + P` automatically detects which monitor your cursor is currently active on and launches centered on that display.
+* **Instant Switching**: Switch monitors on the fly anytime from Settings (`⚙️`) or the right-click System Tray menu.
+
 ---
 
 ## ⚡ Performance & Memory Footprint

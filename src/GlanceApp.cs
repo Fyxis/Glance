@@ -51,6 +51,7 @@ namespace Glance
     {
         public int backgroundAlpha { get; set; }
         public bool isPinned { get; set; }
+        public string displayMode { get; set; }
     }
 
     public class LyricLine
@@ -992,19 +993,24 @@ namespace Glance
         {
             EnsureAppsIndexed();
 
+            Forms.Screen targetScr = Forms.Screen.FromPoint(Forms.Cursor.Position);
+            if (targetScr == null) targetScr = Forms.Screen.PrimaryScreen;
+
+            int screenX = targetScr.Bounds.X;
+            int screenY = targetScr.Bounds.Y;
+            int sw = targetScr.Bounds.Width;
+            int sh = targetScr.Bounds.Height;
+            int dw = Math.Max(320, sw / 4);
+            int dh = Math.Max(180, sh / 4);
+
             // Capture current desktop screen downscaled so the background has a true Gaussian blur with minimal memory footprint
             try
             {
-                int sw = (int)SystemParameters.PrimaryScreenWidth;
-                int sh = (int)SystemParameters.PrimaryScreenHeight;
-                int dw = Math.Max(320, sw / 4);
-                int dh = Math.Max(180, sh / 4);
-
                 using (var fullBmp = new System.Drawing.Bitmap(sw, sh, System.Drawing.Imaging.PixelFormat.Format32bppArgb))
                 {
                     using (var g = System.Drawing.Graphics.FromImage(fullBmp))
                     {
-                        g.CopyFromScreen(0, 0, 0, 0, new System.Drawing.Size(sw, sh), System.Drawing.CopyPixelOperation.SourceCopy);
+                        g.CopyFromScreen(screenX, screenY, 0, 0, new System.Drawing.Size(sw, sh), System.Drawing.CopyPixelOperation.SourceCopy);
                     }
 
                     using (var smallBmp = new System.Drawing.Bitmap(fullBmp, new System.Drawing.Size(dw, dh)))
@@ -1030,10 +1036,23 @@ namespace Glance
             }
             catch { }
 
-            Width = SystemParameters.PrimaryScreenWidth;
-            Height = SystemParameters.PrimaryScreenHeight;
-            Left = 0;
-            Top = 0;
+            double dpiScaleX = 1.0;
+            double dpiScaleY = 1.0;
+            try
+            {
+                PresentationSource source = PresentationSource.FromVisual(this);
+                if (source != null && source.CompositionTarget != null)
+                {
+                    dpiScaleX = source.CompositionTarget.TransformToDevice.M11;
+                    dpiScaleY = source.CompositionTarget.TransformToDevice.M22;
+                }
+            }
+            catch { }
+
+            Left = screenX / dpiScaleX;
+            Top = screenY / dpiScaleY;
+            Width = sw / dpiScaleX;
+            Height = sh / dpiScaleY;
 
             searchInput.Text = "";
             placeholderText.Visibility = Visibility.Visible;
@@ -1324,6 +1343,9 @@ namespace Glance
         private CheckBox chkPin;
         private Slider sliderAlpha;
         private TextBlock lblAlphaVal;
+        private RadioButton rbScreen1;
+        private RadioButton rbScreen2;
+        private RadioButton rbScreenBoth;
         private MainWindow parentIsland;
 
         public SettingsWindow(MainWindow owner)
@@ -1331,7 +1353,7 @@ namespace Glance
             parentIsland = owner;
             Title = "Glance — Pengaturan";
             Width = 430;
-            Height = 385;
+            Height = 525;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
             ResizeMode = ResizeMode.NoResize;
             WindowStyle = WindowStyle.None;
@@ -1411,7 +1433,66 @@ namespace Glance
             cardPin.Child = chkPin;
             root.Children.Add(cardPin);
 
-            // Option 3: Background Transparency Slider
+            // Option 3: Multi-Monitor Display Option
+            Border cardScreen = CreateOptionCard();
+            StackPanel spScreen = new StackPanel();
+
+            TextBlock lblScreenTitle = new TextBlock
+            {
+                Text = "Tampilkan Glance di Layar / Monitor:",
+                Foreground = Brushes.White,
+                FontSize = 12.5,
+                FontWeight = FontWeights.SemiBold,
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+            spScreen.Children.Add(lblScreenTitle);
+
+            int screenCount = Forms.Screen.AllScreens.Length;
+            string curMode = MainWindow.DisplayMode ?? "screen1";
+
+            rbScreen1 = new RadioButton
+            {
+                Content = "Layar 1 Saja (Monitor Utama)",
+                GroupName = "DisplayScreenGroup",
+                Foreground = Brushes.White,
+                FontSize = 12,
+                IsChecked = (curMode == "screen1"),
+                Margin = new Thickness(0, 0, 0, 6),
+                Cursor = Cursors.Hand
+            };
+            rbScreen2 = new RadioButton
+            {
+                Content = screenCount > 1 ? "Layar 2 Saja (Monitor Sekunder)" : "Layar 2 Saja (Tidak terdeteksi)",
+                GroupName = "DisplayScreenGroup",
+                Foreground = screenCount > 1 ? Brushes.White : new SolidColorBrush(Color.FromRgb(130, 130, 140)),
+                FontSize = 12,
+                IsEnabled = screenCount > 1,
+                IsChecked = (curMode == "screen2" && screenCount > 1),
+                Margin = new Thickness(0, 0, 0, 6),
+                Cursor = screenCount > 1 ? Cursors.Hand : Cursors.No
+            };
+            rbScreenBoth = new RadioButton
+            {
+                Content = screenCount > 1 ? "Kedua Layar (Layar 1 & Layar 2)" : "Kedua Layar (Perlu minimal 2 monitor)",
+                GroupName = "DisplayScreenGroup",
+                Foreground = screenCount > 1 ? Brushes.White : new SolidColorBrush(Color.FromRgb(130, 130, 140)),
+                FontSize = 12,
+                IsEnabled = screenCount > 1,
+                IsChecked = (curMode == "both" && screenCount > 1),
+                Cursor = screenCount > 1 ? Cursors.Hand : Cursors.No
+            };
+
+            rbScreen1.Checked += (s, e) => MainWindow.ApplyDisplayMode("screen1");
+            rbScreen2.Checked += (s, e) => { if (screenCount > 1) MainWindow.ApplyDisplayMode("screen2"); };
+            rbScreenBoth.Checked += (s, e) => { if (screenCount > 1) MainWindow.ApplyDisplayMode("both"); };
+
+            spScreen.Children.Add(rbScreen1);
+            spScreen.Children.Add(rbScreen2);
+            spScreen.Children.Add(rbScreenBoth);
+            cardScreen.Child = spScreen;
+            root.Children.Add(cardScreen);
+
+            // Option 4: Background Transparency Slider
             Border cardAlpha = CreateOptionCard();
             StackPanel spAlpha = new StackPanel();
             DockPanel dpAlpha = new DockPanel { Margin = new Thickness(0, 0, 0, 6) };
@@ -1458,7 +1539,7 @@ namespace Glance
 
             TextBlock shortcutHint = new TextBlock
             {
-                Text = "💡 Tekan Ctrl + Shift + P kapan saja untuk membuka Spotlight Search (Pencarian Aplikasi).",
+                Text = "💡 Tekan Ctrl + Shift + P kapan saja untuk membuka Glance Search (Pencarian Aplikasi).",
                 Foreground = new SolidColorBrush(Color.FromRgb(165, 165, 178)),
                 FontSize = 11.5,
                 TextWrapping = TextWrapping.Wrap,
@@ -1481,6 +1562,11 @@ namespace Glance
             saveBtn.Click += (s, e) =>
             {
                 StartupManager.SetStartup(chkStartup.IsChecked == true);
+                string selectedMode = "screen1";
+                if (rbScreen2.IsChecked == true) selectedMode = "screen2";
+                else if (rbScreenBoth.IsChecked == true) selectedMode = "both";
+                MainWindow.ApplyDisplayMode(selectedMode);
+
                 if (parentIsland != null)
                 {
                     parentIsland.SetPinned(chkPin.IsChecked == true);
@@ -1517,6 +1603,24 @@ namespace Glance
         private const double ExpandedHeight = 212;
         private const int SlideCount = 5;
 
+        public static MainWindow PrimaryInstance { get; private set; }
+        public static MainWindow CompanionInstance { get; private set; }
+        private static string _displayMode = "screen1";
+        public static string DisplayMode
+        {
+            get { return _displayMode; }
+            set { _displayMode = value; }
+        }
+        private static string pendingCommand = null;
+        private static double? pendingSeekSec = null;
+
+        public bool IsCompanionWindow { get; private set; }
+        public Forms.Screen TargetScreen { get; private set; }
+
+        private Forms.ToolStripMenuItem trayItemScr1;
+        private Forms.ToolStripMenuItem trayItemScr2;
+        private Forms.ToolStripMenuItem trayItemBoth;
+
         public bool IsPinned { get; private set; }
         public byte BackgroundAlpha { get; private set; }
         private bool isExpanded = false;
@@ -1524,7 +1628,7 @@ namespace Glance
         private int currentSlide = 0;
 
         private SolidColorBrush notchBgBrush;
-        private SpotlightWindow spotlightWin;
+        private static SpotlightWindow spotlightWin;
 
         // UI Elements
         private Border notchBody;
@@ -1632,8 +1736,6 @@ namespace Glance
         private double currentPos = 0;
         private double currentDur = 0;
         private DateTime lastPosSync = DateTime.UtcNow;
-        private string pendingCommand = null;
-        private double? pendingSeekSec = null;
         private bool showLyrics = false;
         private string loadedLyricsKey = "";
         private List<LyricLine> syncedLyrics = new List<LyricLine>();
@@ -1654,9 +1756,15 @@ namespace Glance
         private string lastClipboardText = "";
         private JavaScriptSerializer json = new JavaScriptSerializer();
 
-        public MainWindow()
+        public MainWindow(Forms.Screen targetScreen = null, bool isCompanion = false)
         {
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls;
+
+            IsCompanionWindow = isCompanion;
+            if (!isCompanion)
+            {
+                PrimaryInstance = this;
+            }
 
             BackgroundAlpha = 175;
             string oldDir = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WindowsDynamicIsland");
@@ -1678,10 +1786,20 @@ namespace Glance
             clipFilePath = System.IO.Path.Combine(dataDir, "clipboard.json");
             configFilePath = System.IO.Path.Combine(dataDir, "config.json");
 
-            LoadSavedData();
-            SpotlightWindow.PrewarmIndexAsync();
+            if (!IsCompanionWindow)
+            {
+                LoadSavedData();
+                SpotlightWindow.PrewarmIndexAsync();
+            }
+            else if (PrimaryInstance != null)
+            {
+                BackgroundAlpha = PrimaryInstance.BackgroundAlpha;
+                IsPinned = PrimaryInstance.IsPinned;
+                notesList = new List<NoteItem>(PrimaryInstance.notesList);
+                clipList = new List<ClipItem>(PrimaryInstance.clipList);
+            }
 
-            Title = "Glance";
+            Title = isCompanion ? "Glance (Companion)" : "Glance";
             Width = 490;
             Height = 255;
             WindowStyle = WindowStyle.None;
@@ -1692,26 +1810,50 @@ namespace Glance
             ShowInTaskbar = false;
             ResizeMode = ResizeMode.NoResize;
 
-            PositionTopCenter();
-            SystemEvents.DisplaySettingsChanged += (s, e) => Dispatcher.Invoke(PositionTopCenter);
+            Forms.Screen initialScreen = targetScreen;
+            if (initialScreen == null)
+            {
+                initialScreen = (DisplayMode == "screen2" && Forms.Screen.AllScreens.Length > 1)
+                    ? GetScreen(2)
+                    : GetScreen(1);
+            }
+            PositionOnScreen(initialScreen);
+
+            if (!IsCompanionWindow)
+            {
+                SystemEvents.DisplaySettingsChanged += (s, e) => Dispatcher.Invoke(new Action(RepositionAllWindows));
+            }
 
             BuildUI();
-            SetupTrayIcon();
+
+            if (!IsCompanionWindow)
+            {
+                SetupTrayIcon();
+            }
 
             Loaded += OnWindowLoaded;
             Closing += (s, e) =>
             {
-                try
+                if (!IsCompanionWindow)
                 {
-                    IntPtr hwnd = new WindowInteropHelper(this).Handle;
-                    NativeMethods.UnregisterHotKey(hwnd, HOTKEY_ID_SPOTLIGHT);
-                }
-                catch { }
+                    try
+                    {
+                        IntPtr hwnd = new WindowInteropHelper(this).Handle;
+                        NativeMethods.UnregisterHotKey(hwnd, HOTKEY_ID_SPOTLIGHT);
+                    }
+                    catch { }
 
-                if (trayIcon != null)
-                {
-                    trayIcon.Visible = false;
-                    trayIcon.Dispose();
+                    if (trayIcon != null)
+                    {
+                        trayIcon.Visible = false;
+                        trayIcon.Dispose();
+                    }
+
+                    if (CompanionInstance != null)
+                    {
+                        try { CompanionInstance.Close(); } catch { }
+                        CompanionInstance = null;
+                    }
                 }
             };
         }
@@ -1723,6 +1865,10 @@ namespace Glance
             {
                 notchBgBrush.Color = Color.FromArgb(BackgroundAlpha, 6, 6, 10);
             }
+            if (!IsCompanionWindow && CompanionInstance != null)
+            {
+                CompanionInstance.SetBackgroundAlpha(alpha);
+            }
         }
 
         public void SaveAppConfig()
@@ -1732,87 +1878,219 @@ namespace Glance
                 var cfg = new AppConfig
                 {
                     backgroundAlpha = BackgroundAlpha,
-                    isPinned = IsPinned
+                    isPinned = IsPinned,
+                    displayMode = DisplayMode
                 };
                 File.WriteAllText(configFilePath, json.Serialize(cfg), Encoding.UTF8);
             }
             catch { }
         }
 
-        private void PositionTopCenter()
+        public void PositionOnScreen(Forms.Screen screen)
         {
-            double screenWidth = SystemParameters.PrimaryScreenWidth;
-            Left = Math.Round((screenWidth - Width) / 2.0);
-            Top = 0;
+            if (screen == null) screen = Forms.Screen.PrimaryScreen;
+            TargetScreen = screen;
+
+            double dpiScaleX = 1.0;
+            double dpiScaleY = 1.0;
+            try
+            {
+                PresentationSource source = PresentationSource.FromVisual(this);
+                if (source != null && source.CompositionTarget != null)
+                {
+                    dpiScaleX = source.CompositionTarget.TransformToDevice.M11;
+                    dpiScaleY = source.CompositionTarget.TransformToDevice.M22;
+                }
+            }
+            catch { }
+
+            double screenDipLeft = screen.Bounds.X / dpiScaleX;
+            double screenDipTop = screen.Bounds.Y / dpiScaleY;
+            double screenDipWidth = screen.Bounds.Width / dpiScaleX;
+
+            Left = screenDipLeft + Math.Round((screenDipWidth - Width) / 2.0);
+            Top = screenDipTop;
+        }
+
+        public static Forms.Screen GetScreen(int index)
+        {
+            var screens = Forms.Screen.AllScreens;
+            if (screens == null || screens.Length == 0) return Forms.Screen.PrimaryScreen;
+            if (index == 1)
+            {
+                var pri = screens.FirstOrDefault(s => s.Primary);
+                return pri ?? screens[0];
+            }
+            else if (index == 2)
+            {
+                var nonPri = screens.FirstOrDefault(s => !s.Primary);
+                if (nonPri != null) return nonPri;
+                if (screens.Length > 1) return screens[1];
+                return screens[0];
+            }
+            return screens[0];
+        }
+
+        public static void ApplyDisplayMode(string mode)
+        {
+            if (string.IsNullOrEmpty(mode)) mode = "screen1";
+            int screenCount = Forms.Screen.AllScreens.Length;
+            if (screenCount < 2 && (mode == "screen2" || mode == "both"))
+            {
+                mode = "screen1";
+            }
+
+            DisplayMode = mode;
+            if (PrimaryInstance == null) return;
+
+            PrimaryInstance.Dispatcher.Invoke(() =>
+            {
+                if (DisplayMode == "screen2")
+                {
+                    PrimaryInstance.PositionOnScreen(GetScreen(2));
+                    PrimaryInstance.Show();
+
+                    if (CompanionInstance != null)
+                    {
+                        try { CompanionInstance.Close(); } catch { }
+                        CompanionInstance = null;
+                        MemoryOptimizer.TrimMemory();
+                    }
+                }
+                else if (DisplayMode == "both")
+                {
+                    PrimaryInstance.PositionOnScreen(GetScreen(1));
+                    PrimaryInstance.Show();
+
+                    if (CompanionInstance == null)
+                    {
+                        CompanionInstance = new MainWindow(GetScreen(2), isCompanion: true);
+                        CompanionInstance.Show();
+                        if (PrimaryInstance.albumImageBrush != null)
+                        {
+                            BitmapSource curBmp = PrimaryInstance.albumImageBrush.ImageSource as BitmapSource;
+                            if (curBmp != null)
+                            {
+                                CompanionInstance.SetAlbumArtVisuals(curBmp);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        CompanionInstance.PositionOnScreen(GetScreen(2));
+                        CompanionInstance.Show();
+                    }
+                }
+                else // "screen1"
+                {
+                    PrimaryInstance.PositionOnScreen(GetScreen(1));
+                    PrimaryInstance.Show();
+
+                    if (CompanionInstance != null)
+                    {
+                        try { CompanionInstance.Close(); } catch { }
+                        CompanionInstance = null;
+                        MemoryOptimizer.TrimMemory();
+                    }
+                }
+
+                PrimaryInstance.UpdateTrayDisplayModeMenu();
+                PrimaryInstance.SaveAppConfig();
+            });
+        }
+
+        public static void RepositionAllWindows()
+        {
+            if (PrimaryInstance != null)
+            {
+                ApplyDisplayMode(DisplayMode);
+            }
         }
 
         private void OnWindowLoaded(object sender, RoutedEventArgs e)
         {
-            IntPtr hwnd = new WindowInteropHelper(this).Handle;
-            int exStyle = NativeMethods.GetWindowLong(hwnd, NativeMethods.GWL_EXSTYLE);
-            NativeMethods.SetWindowLong(hwnd, NativeMethods.GWL_EXSTYLE, exStyle | NativeMethods.WS_EX_TOOLWINDOW);
-
-            // Register Global Hotkey: Ctrl + Shift + P
-            HwndSource src = HwndSource.FromHwnd(hwnd);
-            if (src != null)
+            try
             {
-                src.AddHook(WndProc);
-            }
-            NativeMethods.RegisterHotKey(
-                hwnd,
-                HOTKEY_ID_SPOTLIGHT,
-                NativeMethods.MOD_CONTROL | NativeMethods.MOD_SHIFT | NativeMethods.MOD_NOREPEAT,
-                NativeMethods.VK_P
-            );
+                IntPtr hwnd = new WindowInteropHelper(this).Handle;
+                int exStyle = NativeMethods.GetWindowLong(hwnd, NativeMethods.GWL_EXSTYLE);
+                NativeMethods.SetWindowLong(hwnd, NativeMethods.GWL_EXSTYLE, exStyle | NativeMethods.WS_EX_TOOLWINDOW);
 
-            collapseDelayTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(240) };
-            collapseDelayTimer.Tick += (s, ev) =>
-            {
-                collapseDelayTimer.Stop();
-                if (!IsPinned && !isInputFocused && !notchBody.IsMouseOver)
+                if (TargetScreen != null)
                 {
-                    AnimateToCollapsed();
+                    PositionOnScreen(TargetScreen);
                 }
-            };
 
-            clockTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
-            clockTimer.Tick += OnFastTick;
-            clockTimer.Start();
-            OnFastTick(null, null);
-
-            clipboardTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(900) };
-            clipboardTimer.Tick += OnClipboardTick;
-            clipboardTimer.Start();
-
-            waveformTimer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(45) };
-            waveformTimer.Tick += OnWaveformTick;
-
-            if (IsPinned)
-            {
-                SetPinned(true);
-            }
-
-            // Startup one-shot memory trimmer (flushes initial WPF / DirectX / font cache setup bloat)
-            var startupTrimTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2.0) };
-            startupTrimTimer.Tick += (s, ev) =>
-            {
-                startupTrimTimer.Stop();
-                MemoryOptimizer.TrimMemory(force: true);
-            };
-            startupTrimTimer.Start();
-
-            // Periodic background memory trimmer (every 30 seconds when collapsed/idle)
-            var maintenanceTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30.0) };
-            maintenanceTimer.Tick += (s, ev) =>
-            {
-                if (!isExpanded && (spotlightWin == null || !spotlightWin.IsVisible))
+                collapseDelayTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(240) };
+                collapseDelayTimer.Tick += (s, ev) =>
                 {
-                    MemoryOptimizer.TrimMemory();
-                }
-            };
-            maintenanceTimer.Start();
+                    collapseDelayTimer.Stop();
+                    if (!IsPinned && !isInputFocused && !notchBody.IsMouseOver)
+                    {
+                        AnimateToCollapsed();
+                    }
+                };
 
-            Task.Run(() => BackgroundMediaAndSystemLoop());
+                waveformTimer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(45) };
+                waveformTimer.Tick += OnWaveformTick;
+
+                if (IsPinned)
+                {
+                    SetPinned(true);
+                }
+
+                if (!IsCompanionWindow)
+                {
+                    // Register Global Hotkey: Ctrl + Shift + P
+                    HwndSource src = HwndSource.FromHwnd(hwnd);
+                    if (src != null)
+                    {
+                        src.AddHook(WndProc);
+                    }
+                    NativeMethods.RegisterHotKey(
+                        hwnd,
+                        HOTKEY_ID_SPOTLIGHT,
+                        NativeMethods.MOD_CONTROL | NativeMethods.MOD_SHIFT | NativeMethods.MOD_NOREPEAT,
+                        NativeMethods.VK_P
+                    );
+
+                    clockTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+                    clockTimer.Tick += OnFastTick;
+                    clockTimer.Start();
+                    OnFastTick(null, null);
+
+                    clipboardTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(900) };
+                    clipboardTimer.Tick += OnClipboardTick;
+                    clipboardTimer.Start();
+
+                    // Startup one-shot memory trimmer (flushes initial WPF / DirectX / font cache setup bloat)
+                    var startupTrimTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2.0) };
+                    startupTrimTimer.Tick += (s, ev) =>
+                    {
+                        startupTrimTimer.Stop();
+                        MemoryOptimizer.TrimMemory(force: true);
+                    };
+                    startupTrimTimer.Start();
+
+                    // Periodic background memory trimmer (every 30 seconds when collapsed/idle)
+                    var maintenanceTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30.0) };
+                    maintenanceTimer.Tick += (s, ev) =>
+                    {
+                        if (!isExpanded && (spotlightWin == null || !spotlightWin.IsVisible))
+                        {
+                            MemoryOptimizer.TrimMemory();
+                        }
+                    };
+                    maintenanceTimer.Start();
+
+                    Task.Run(() => BackgroundMediaAndSystemLoop());
+
+                    ApplyDisplayMode(DisplayMode);
+                }
+            }
+            catch (Exception ex)
+            {
+                File.WriteAllText("d:\\Coding-an\\windows-notch\\error.log", "OnWindowLoaded error: " + ex.ToString());
+            }
         }
 
         private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -1852,7 +2130,18 @@ namespace Glance
                 ? new SolidColorBrush(Color.FromRgb(28, 231, 85))
                 : new SolidColorBrush(Color.FromRgb(140, 140, 150));
 
-            SaveAppConfig();
+            if (!IsCompanionWindow)
+            {
+                SaveAppConfig();
+                if (CompanionInstance != null && CompanionInstance.IsPinned != pinned)
+                {
+                    CompanionInstance.SetPinned(pinned);
+                }
+            }
+            else if (PrimaryInstance != null && PrimaryInstance.IsPinned != pinned)
+            {
+                PrimaryInstance.SetPinned(pinned);
+            }
 
             if (IsPinned)
             {
@@ -3278,6 +3567,11 @@ namespace Glance
             expandedDateText.Text = dateStr;
 
             UpdateMediaTimelineUI();
+
+            if (!IsCompanionWindow && CompanionInstance != null && CompanionInstance.IsVisible)
+            {
+                CompanionInstance.OnFastTick(sender, e);
+            }
         }
 
         private void UpdateMediaTimelineUI()
@@ -4037,6 +4331,28 @@ namespace Glance
                 double bw = brightTrackBorder.ActualWidth > 0 ? brightTrackBorder.ActualWidth : 155.0;
                 brightFillBorder.Width = bw * (brightnessPct / 100.0);
             }
+
+            if (!IsCompanionWindow && CompanionInstance != null && CompanionInstance.IsVisible)
+            {
+                CompanionInstance.ApplySnapshotToUI(
+                    snap,
+                    batPct,
+                    isCharging,
+                    cpuPct,
+                    ramPct,
+                    usedRamGB,
+                    totalRamGB,
+                    drives,
+                    volPct,
+                    isMuted,
+                    brightnessPct,
+                    wifiConnected,
+                    wifiSsid,
+                    wifiSignal,
+                    netDownBps,
+                    netUpBps
+                );
+            }
         }
 
         // =======================================================
@@ -4056,6 +4372,10 @@ namespace Glance
                             BackgroundAlpha = (byte)cfg.backgroundAlpha;
                         }
                         IsPinned = cfg.isPinned;
+                        if (!string.IsNullOrEmpty(cfg.displayMode))
+                        {
+                            DisplayMode = cfg.displayMode;
+                        }
                     }
                 }
             }
@@ -4093,11 +4413,31 @@ namespace Glance
         private void SaveNotesData()
         {
             try { File.WriteAllText(notesFilePath, json.Serialize(notesList), Encoding.UTF8); } catch { }
+            if (!IsCompanionWindow && CompanionInstance != null)
+            {
+                CompanionInstance.notesList = new List<NoteItem>(notesList);
+                CompanionInstance.RenderNotesList();
+            }
+            else if (IsCompanionWindow && PrimaryInstance != null)
+            {
+                PrimaryInstance.notesList = new List<NoteItem>(notesList);
+                PrimaryInstance.RenderNotesList();
+            }
         }
 
         private void SaveClipData()
         {
             try { File.WriteAllText(clipFilePath, json.Serialize(clipList.Take(25).ToList()), Encoding.UTF8); } catch { }
+            if (!IsCompanionWindow && CompanionInstance != null)
+            {
+                CompanionInstance.clipList = new List<ClipItem>(clipList);
+                CompanionInstance.RenderClipboardList();
+            }
+            else if (IsCompanionWindow && PrimaryInstance != null)
+            {
+                PrimaryInstance.clipList = new List<ClipItem>(clipList);
+                PrimaryInstance.RenderClipboardList();
+            }
         }
 
         private void OnClipboardTick(object sender, EventArgs e)
@@ -4330,17 +4670,43 @@ namespace Glance
             Forms.ContextMenuStrip menu = new Forms.ContextMenuStrip();
             menu.Items.Add("Glance Search (Ctrl+Shift+P)", null, (s, e) => Dispatcher.Invoke(ToggleSpotlightSearch));
             menu.Items.Add("Pengaturan Glance...", null, (s, e) => Dispatcher.Invoke(OpenSettingsDialog));
+
+            int screenCount = Forms.Screen.AllScreens.Length;
+            Forms.ToolStripMenuItem screenSubMenu = new Forms.ToolStripMenuItem("Pilih Layar / Monitor");
+
+            trayItemScr1 = new Forms.ToolStripMenuItem("Layar 1 Saja (Utama)", null, (s, e) => ApplyDisplayMode("screen1"));
+            trayItemScr2 = new Forms.ToolStripMenuItem(screenCount > 1 ? "Layar 2 Saja (Sekunder)" : "Layar 2 Saja (Tidak terdeteksi)", null, (s, e) => { if (screenCount > 1) ApplyDisplayMode("screen2"); });
+            trayItemBoth = new Forms.ToolStripMenuItem(screenCount > 1 ? "Kedua Layar" : "Kedua Layar (Perlu 2 monitor)", null, (s, e) => { if (screenCount > 1) ApplyDisplayMode("both"); });
+
+            trayItemScr2.Enabled = screenCount > 1;
+            trayItemBoth.Enabled = screenCount > 1;
+
+            screenSubMenu.DropDownItems.Add(trayItemScr1);
+            screenSubMenu.DropDownItems.Add(trayItemScr2);
+            screenSubMenu.DropDownItems.Add(trayItemBoth);
+            menu.Items.Add(screenSubMenu);
+
             menu.Items.Add("Kunci / Lepas Posisi Terbuka (Pin)", null, (s, e) => Dispatcher.Invoke(() => SetPinned(!IsPinned)));
             menu.Items.Add(new Forms.ToolStripSeparator());
             menu.Items.Add("Keluar dari Glance", null, (s, e) => Dispatcher.Invoke(() => Application.Current.Shutdown()));
 
             trayIcon.ContextMenuStrip = menu;
             trayIcon.DoubleClick += (s, e) => Dispatcher.Invoke(OpenSettingsDialog);
+
+            UpdateTrayDisplayModeMenu();
+        }
+
+        private void UpdateTrayDisplayModeMenu()
+        {
+            if (trayItemScr1 == null || trayItemScr2 == null || trayItemBoth == null) return;
+            trayItemScr1.Checked = (DisplayMode == "screen1");
+            trayItemScr2.Checked = (DisplayMode == "screen2");
+            trayItemBoth.Checked = (DisplayMode == "both");
         }
 
         public void OpenSettingsDialog()
         {
-            SettingsWindow sw = new SettingsWindow(this);
+            SettingsWindow sw = new SettingsWindow(PrimaryInstance ?? this);
             sw.ShowDialog();
         }
     }
@@ -4369,6 +4735,7 @@ namespace Glance
                 }
 
                 Application app = new Application();
+                app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
                 app.DispatcherUnhandledException += (s, e) =>
                 {
                     File.WriteAllText("d:\\Coding-an\\windows-notch\\error.log", e.Exception.ToString());
