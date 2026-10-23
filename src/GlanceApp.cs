@@ -1655,8 +1655,17 @@ namespace Glance
         private Grid[] slidePanels = new Grid[SlideCount];
         private Border[] dotPills = new Border[SlideCount];
 
-        // Slide 0: Media UI
+        // Slide 0: Media Player + Calendar / Lyrics UI
         private Grid mediaStandardPanel;
+        private Border calendarPanel;
+        private TextBlock calDayNameText;
+        private TextBlock calDateNumText;
+        private TextBlock calMonthYearText;
+        private StackPanel calWeekStrip;
+        private int lastCalendarDay = -1;
+        private static readonly string[] IndonesianDayNames = { "MINGGU", "SENIN", "SELASA", "RABU", "KAMIS", "JUMAT", "SABTU" };
+        private static readonly string[] IndonesianMonthNames = { "Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember" };
+        private static readonly string[] DayInitials = { "M", "S", "S", "R", "K", "J", "S" };
         private Grid lyricsPanel;
         private Border albumArtBox;
         private ImageBrush albumImageBrush;
@@ -2630,7 +2639,7 @@ namespace Glance
 
             string[] slideTitles =
             {
-                "Media Player & Lirik",
+                "Media Player & Kalender / Lirik",
                 "Baterai, CPU, RAM & Disk (C: / D:)",
                 "Wi-Fi, Sound & Brightness",
                 "Riwayat Clipboard",
@@ -2660,28 +2669,37 @@ namespace Glance
         }
 
         // =======================================================
-        // SLIDE 0: MEDIA PLAYER + LYRICS
+        // SLIDE 0: MEDIA PLAYER (LEFT) + CALENDAR / LYRICS (RIGHT)
         // =======================================================
         private Grid BuildMediaSlide()
         {
             Grid slide = new Grid();
-            slide.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-            slide.RowDefinitions.Add(new RowDefinition { Height = new GridLength(32) });
+            slide.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(176) });
+            slide.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(12) });
+            slide.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-            mediaStandardPanel = new Grid();
-            mediaStandardPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(72) });
-            mediaStandardPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(28) });
+            // ---------------------------------------------------
+            // LEFT COLUMN: MEDIA PLAYER CONTROLS
+            // ---------------------------------------------------
+            mediaStandardPanel = new Grid
+            {
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            mediaStandardPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(48) });
+            mediaStandardPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(20) });
+            mediaStandardPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(34) });
 
-            Grid topRow = new Grid { Margin = new Thickness(0, 2, 0, 0) };
-            topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(68) });
-            topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(16) });
+            // 1. Top Track Info (Album Art + Title/Artist)
+            Grid topRow = new Grid { VerticalAlignment = VerticalAlignment.Center };
+            topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(46) });
+            topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10) });
             topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
             albumArtBox = new Border
             {
-                Width = 66,
-                Height = 66,
-                CornerRadius = new CornerRadius(13),
+                Width = 46,
+                Height = 46,
+                CornerRadius = new CornerRadius(10),
                 Background = new SolidColorBrush(Color.FromArgb(65, 255, 255, 255)),
                 BorderBrush = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
                 BorderThickness = new Thickness(1),
@@ -2694,8 +2712,8 @@ namespace Glance
             {
                 Data = Geometry.Parse("M 12,3 L 12,13.55 C 11.41,13.21 10.73,13 10,13 C 7.79,13 6,14.79 6,17 C 6,19.21 7.79,21 10,21 C 12.21,21 14,19.21 14,17 L 14,7 L 18,7 L 18,3 L 12,3 Z"),
                 Fill = new SolidColorBrush(Color.FromArgb(160, 180, 180, 190)),
-                Width = 30,
-                Height = 30,
+                Width = 22,
+                Height = 22,
                 Stretch = Stretch.Uniform,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
@@ -2708,15 +2726,15 @@ namespace Glance
             {
                 Text = "Tidak ada media",
                 Foreground = Brushes.White,
-                FontSize = 15,
+                FontSize = 13,
                 FontWeight = FontWeights.Bold,
                 TextTrimming = TextTrimming.CharacterEllipsis
             };
             mediaArtistText = new TextBlock
             {
                 Text = "",
-                Foreground = new SolidColorBrush(Color.FromRgb(180, 180, 190)),
-                FontSize = 12.5,
+                Foreground = new SolidColorBrush(Color.FromRgb(175, 175, 185)),
+                FontSize = 10.5,
                 FontWeight = FontWeights.Medium,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 Margin = new Thickness(0, 2, 0, 0),
@@ -2730,18 +2748,19 @@ namespace Glance
             topRow.Children.Add(titleCol);
             Grid.SetRow(topRow, 0);
 
-            Grid progRow = new Grid { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 4, 0, 0) };
-            progRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(38) });
-            progRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10) });
+            // 2. Timeline Progress Bar
+            Grid progRow = new Grid { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 3, 0, 0) };
+            progRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(32) });
+            progRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(6) });
             progRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            progRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10) });
-            progRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(44) });
+            progRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(6) });
+            progRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(36) });
 
             timeCurrentText = new TextBlock
             {
                 Text = "00:00",
                 Foreground = new SolidColorBrush(Color.FromRgb(160, 160, 170)),
-                FontSize = 12.5,
+                FontSize = 10,
                 FontWeight = FontWeights.Medium,
                 VerticalAlignment = VerticalAlignment.Center
             };
@@ -2749,18 +2768,18 @@ namespace Glance
 
             progressTrackBorder = new Border
             {
-                Height = 5,
-                CornerRadius = new CornerRadius(2.5),
-                Background = new SolidColorBrush(Color.FromArgb(80, 255, 255, 255)),
+                Height = 4,
+                CornerRadius = new CornerRadius(2),
+                Background = new SolidColorBrush(Color.FromArgb(70, 255, 255, 255)),
                 VerticalAlignment = VerticalAlignment.Center,
                 Cursor = Cursors.Hand,
                 ClipToBounds = true
             };
             progressFillBorder = new Border
             {
-                Height = 5,
+                Height = 4,
                 Width = 0,
-                CornerRadius = new CornerRadius(2.5),
+                CornerRadius = new CornerRadius(2),
                 Background = Brushes.White,
                 HorizontalAlignment = HorizontalAlignment.Left
             };
@@ -2772,7 +2791,7 @@ namespace Glance
             {
                 Text = "-00:00",
                 Foreground = new SolidColorBrush(Color.FromRgb(160, 160, 170)),
-                FontSize = 12.5,
+                FontSize = 10,
                 FontWeight = FontWeights.Medium,
                 HorizontalAlignment = HorizontalAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Center
@@ -2784,25 +2803,216 @@ namespace Glance
             progRow.Children.Add(timeRemainingText);
             Grid.SetRow(progRow, 1);
 
+            // 3. Transport Controls Row (Lyrics Toggle + Prev + Play/Pause + Next)
+            StackPanel controlsRow = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 2, 0, 0)
+            };
+
+            // Lyrics Toggle Button
+            lyricsBtnBorder = new Border
+            {
+                Width = 26,
+                Height = 26,
+                CornerRadius = new CornerRadius(6),
+                Background = Brushes.Transparent,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 8, 0),
+                Cursor = Cursors.Hand,
+                ToolTip = "Tampilkan / Sembunyikan Lirik Lagu di Sisi Kanan"
+            };
+            lyricsBtnIcon = new Path
+            {
+                Data = Geometry.Parse("M 4,4 L 20,4 C 21.1,4 22,4.9 22,6 L 22,16 C 22,17.1 21.1,18 20,18 L 8,18 L 4,22 L 4,6 C 4,4.9 4.9,4 4,4 Z M 8,9 L 11,9 L 11,12 L 9.5,14 L 8,14 L 9.2,12 L 8,12 Z M 13,9 L 16,9 L 16,12 L 14.5,14 L 13,14 L 14.2,12 L 13,12 Z"),
+                Fill = new SolidColorBrush(Color.FromRgb(150, 150, 160)),
+                Width = 15,
+                Height = 15,
+                Stretch = Stretch.Uniform
+            };
+            lyricsBtnBorder.Child = lyricsBtnIcon;
+            lyricsBtnBorder.MouseEnter += (s, e) => { if (!showLyrics) lyricsBtnIcon.Fill = Brushes.White; };
+            lyricsBtnBorder.MouseLeave += (s, e) => { if (!showLyrics) lyricsBtnIcon.Fill = new SolidColorBrush(Color.FromRgb(150, 150, 160)); };
+            lyricsBtnBorder.MouseLeftButtonUp += (s, e) => { e.Handled = true; ToggleLyricsView(); };
+            controlsRow.Children.Add(lyricsBtnBorder);
+
+            Border btnPrev = CreateMediaIconBtn("M 11,18 L 11,6 L 2.5,12 Z M 11.5,12 L 20,18 L 20,6 Z", 14, "Lagu Sebelumnya");
+            btnPrev.Margin = new Thickness(0, 0, 6, 0);
+            btnPrev.MouseLeftButtonUp += (s, e) => { e.Handled = true; pendingCommand = "prev"; };
+
+            Border btnPlay = CreateMediaIconBtn("M 8,5 L 8,19 L 19,12 Z", 15, "Putar / Jeda", out playPauseIconPath);
+            btnPlay.Width = 32;
+            btnPlay.Height = 32;
+            btnPlay.CornerRadius = new CornerRadius(16);
+            btnPlay.Background = new SolidColorBrush(Color.FromArgb(35, 255, 255, 255));
+            btnPlay.Margin = new Thickness(0, 0, 6, 0);
+            btnPlay.MouseEnter += (s, e) => btnPlay.Background = new SolidColorBrush(Color.FromArgb(60, 255, 255, 255));
+            btnPlay.MouseLeave += (s, e) => btnPlay.Background = new SolidColorBrush(Color.FromArgb(35, 255, 255, 255));
+            btnPlay.MouseLeftButtonUp += (s, e) => { e.Handled = true; pendingCommand = "play-pause"; };
+
+            Border btnNext = CreateMediaIconBtn("M 4,18 L 12.5,12 L 4,6 Z M 13,6 L 13,18 L 21.5,12 Z", 14, "Lagu Berikutnya");
+            btnNext.MouseLeftButtonUp += (s, e) => { e.Handled = true; pendingCommand = "next"; };
+
+            controlsRow.Children.Add(btnPrev);
+            controlsRow.Children.Add(btnPlay);
+            controlsRow.Children.Add(btnNext);
+            Grid.SetRow(controlsRow, 2);
+
             mediaStandardPanel.Children.Add(topRow);
             mediaStandardPanel.Children.Add(progRow);
-            Grid.SetRow(mediaStandardPanel, 0);
+            mediaStandardPanel.Children.Add(controlsRow);
+            Grid.SetColumn(mediaStandardPanel, 0);
 
-            // Lyrics Overlay Panel
-            lyricsPanel = new Grid { Visibility = Visibility.Collapsed };
-            lyricsPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(18) });
+            // ---------------------------------------------------
+            // CENTER COLUMN: VERTICAL FROSTED SEPARATOR
+            // ---------------------------------------------------
+            Border sep = new Border
+            {
+                Width = 1,
+                Height = 110,
+                VerticalAlignment = VerticalAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Background = new SolidColorBrush(Color.FromArgb(30, 255, 255, 255))
+            };
+            Grid.SetColumn(sep, 1);
+
+            // ---------------------------------------------------
+            // RIGHT COLUMN: CARD HOST FOR CALENDAR OR LYRICS
+            // ---------------------------------------------------
+            Border rightCard = new Border
+            {
+                Height = 138,
+                VerticalAlignment = VerticalAlignment.Center,
+                CornerRadius = new CornerRadius(14),
+                Background = new SolidColorBrush(Color.FromArgb(28, 255, 255, 255)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(22, 255, 255, 255)),
+                BorderThickness = new Thickness(1),
+                Padding = new Thickness(7, 6, 7, 6),
+                ClipToBounds = true
+            };
+
+            Grid rightContainer = new Grid();
+
+            // 1. Calendar Panel (Default View)
+            calendarPanel = new Border
+            {
+                Background = Brushes.Transparent,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Center,
+                Cursor = Cursors.Hand,
+                ToolTip = "Kalender Glance (Klik untuk buka Jam / Kalender Windows, klik ♪ di kiri untuk lirik lagu)"
+            };
+            calendarPanel.MouseLeftButtonUp += (s, e) =>
+            {
+                e.Handled = true;
+                try { Process.Start(new ProcessStartInfo("ms-clock:") { UseShellExecute = true }); } catch { }
+            };
+
+            StackPanel calStack = new StackPanel
+            {
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            calDayNameText = new TextBlock
+            {
+                Text = "HARI",
+                Foreground = new SolidColorBrush(Color.FromRgb(28, 231, 85)), // Emerald Accent
+                FontSize = 10,
+                FontWeight = FontWeights.Bold,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, 0, 0, 0)
+            };
+
+            calDateNumText = new TextBlock
+            {
+                Text = "00",
+                Foreground = Brushes.White,
+                FontSize = 32,
+                FontWeight = FontWeights.Bold,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, -3, 0, -3)
+            };
+
+            calMonthYearText = new TextBlock
+            {
+                Text = "Bulan Tahun",
+                Foreground = new SolidColorBrush(Color.FromRgb(185, 185, 195)),
+                FontSize = 11,
+                FontWeight = FontWeights.SemiBold,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, 0, 0, 7)
+            };
+
+            calWeekStrip = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Center
+            };
+
+            calStack.Children.Add(calDayNameText);
+            calStack.Children.Add(calDateNumText);
+            calStack.Children.Add(calMonthYearText);
+            calStack.Children.Add(calWeekStrip);
+            calendarPanel.Child = calStack;
+
+            // 2. Lyrics Panel (Toggled View)
+            lyricsPanel = new Grid
+            {
+                Visibility = Visibility.Collapsed,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Stretch
+            };
+            lyricsPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(20) });
             lyricsPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+            Grid lyricsHeaderRow = new Grid();
+            lyricsHeaderRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            lyricsHeaderRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(18) });
 
             lyricsHeaderText = new TextBlock
             {
                 Text = "Lirik Lagu",
-                Foreground = new SolidColorBrush(Color.FromRgb(180, 180, 190)),
-                FontSize = 11,
-                FontWeight = FontWeights.SemiBold,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                TextTrimming = TextTrimming.CharacterEllipsis
+                Foreground = new SolidColorBrush(Color.FromRgb(28, 231, 85)),
+                FontSize = 10,
+                FontWeight = FontWeights.Bold,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Center,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Margin = new Thickness(2, 0, 0, 0)
             };
-            Grid.SetRow(lyricsHeaderText, 0);
+            Grid.SetColumn(lyricsHeaderText, 0);
+
+            Border closeLyricsBtn = new Border
+            {
+                Width = 16,
+                Height = 16,
+                CornerRadius = new CornerRadius(8),
+                Background = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
+                Cursor = Cursors.Hand,
+                ToolTip = "Tutup Lirik & Kembali ke Kalender",
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            TextBlock closeLyricsIcon = new TextBlock
+            {
+                Text = "✕",
+                FontSize = 9,
+                Foreground = Brushes.White,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            closeLyricsBtn.Child = closeLyricsIcon;
+            closeLyricsBtn.MouseEnter += (s, e) => closeLyricsBtn.Background = new SolidColorBrush(Color.FromArgb(70, 255, 255, 255));
+            closeLyricsBtn.MouseLeave += (s, e) => closeLyricsBtn.Background = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255));
+            closeLyricsBtn.MouseLeftButtonUp += (s, e) => { e.Handled = true; ToggleLyricsView(); };
+            Grid.SetColumn(closeLyricsBtn, 1);
+
+            lyricsHeaderRow.Children.Add(lyricsHeaderText);
+            lyricsHeaderRow.Children.Add(closeLyricsBtn);
+            Grid.SetRow(lyricsHeaderRow, 0);
 
             lyricsScroll = new ScrollViewer
             {
@@ -2814,67 +3024,93 @@ namespace Glance
             lyricsScroll.Content = lyricsStack;
             Grid.SetRow(lyricsScroll, 1);
 
-            lyricsPanel.Children.Add(lyricsHeaderText);
+            lyricsPanel.Children.Add(lyricsHeaderRow);
             lyricsPanel.Children.Add(lyricsScroll);
-            Grid.SetRow(lyricsPanel, 0);
 
-            // Bottom Media Controls Row
-            Grid controlsRow = new Grid { Margin = new Thickness(0, 2, 0, 0) };
+            rightContainer.Children.Add(calendarPanel);
+            rightContainer.Children.Add(lyricsPanel);
+            rightCard.Child = rightContainer;
+            Grid.SetColumn(rightCard, 2);
 
-            lyricsBtnBorder = new Border
-            {
-                Width = 28,
-                Height = 28,
-                CornerRadius = new CornerRadius(7),
-                Background = Brushes.Transparent,
-                HorizontalAlignment = HorizontalAlignment.Left,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(8, 0, 0, 0),
-                Cursor = Cursors.Hand,
-                ToolTip = "Tampilkan / Sembunyikan Lirik Lagu"
-            };
-            lyricsBtnIcon = new Path
-            {
-                Data = Geometry.Parse("M 4,4 L 20,4 C 21.1,4 22,4.9 22,6 L 22,16 C 22,17.1 21.1,18 20,18 L 8,18 L 4,22 L 4,6 C 4,4.9 4.9,4 4,4 Z M 8,9 L 11,9 L 11,12 L 9.5,14 L 8,14 L 9.2,12 L 8,12 Z M 13,9 L 16,9 L 16,12 L 14.5,14 L 13,14 L 14.2,12 L 13,12 Z"),
-                Fill = new SolidColorBrush(Color.FromRgb(150, 150, 160)),
-                Width = 17,
-                Height = 17,
-                Stretch = Stretch.Uniform
-            };
-            lyricsBtnBorder.Child = lyricsBtnIcon;
-            lyricsBtnBorder.MouseEnter += (s, e) => { if (!showLyrics) lyricsBtnIcon.Fill = Brushes.White; };
-            lyricsBtnBorder.MouseLeave += (s, e) => { if (!showLyrics) lyricsBtnIcon.Fill = new SolidColorBrush(Color.FromRgb(150, 150, 160)); };
-            lyricsBtnBorder.MouseLeftButtonUp += (s, e) => { e.Handled = true; ToggleLyricsView(); };
-            controlsRow.Children.Add(lyricsBtnBorder);
-
-            StackPanel transport = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-
-            Border btnPrev = CreateMediaIconBtn("M 11,18 L 11,6 L 2.5,12 Z M 11.5,12 L 20,18 L 20,6 Z", 19, "Lagu Sebelumnya");
-            btnPrev.MouseLeftButtonUp += (s, e) => { e.Handled = true; pendingCommand = "prev"; };
-
-            Border btnPlay = CreateMediaIconBtn("M 8,5 L 8,19 L 19,12 Z", 20, "Putar / Jeda", out playPauseIconPath);
-            btnPlay.Margin = new Thickness(24, 0, 24, 0);
-            btnPlay.MouseLeftButtonUp += (s, e) => { e.Handled = true; pendingCommand = "play-pause"; };
-
-            Border btnNext = CreateMediaIconBtn("M 4,18 L 12.5,12 L 4,6 Z M 13,6 L 13,18 L 21.5,12 Z", 19, "Lagu Berikutnya");
-            btnNext.MouseLeftButtonUp += (s, e) => { e.Handled = true; pendingCommand = "next"; };
-
-            transport.Children.Add(btnPrev);
-            transport.Children.Add(btnPlay);
-            transport.Children.Add(btnNext);
-            controlsRow.Children.Add(transport);
-
-            Grid.SetRow(controlsRow, 1);
+            // Populate Calendar Initial Data
+            UpdateCalendarUI(DateTime.Now);
 
             slide.Children.Add(mediaStandardPanel);
-            slide.Children.Add(lyricsPanel);
-            slide.Children.Add(controlsRow);
+            slide.Children.Add(sep);
+            slide.Children.Add(rightCard);
+
             return slide;
+        }
+
+        private void UpdateCalendarUI(DateTime now)
+        {
+            if (calDayNameText == null) return;
+            if (lastCalendarDay == now.Day && !string.IsNullOrEmpty(calDayNameText.Text)) return;
+            lastCalendarDay = now.Day;
+
+            int dayOfWeekIdx = (int)now.DayOfWeek;
+            calDayNameText.Text = IndonesianDayNames[dayOfWeekIdx];
+            calDateNumText.Text = now.Day.ToString();
+            calMonthYearText.Text = IndonesianMonthNames[now.Month - 1] + " " + now.Year;
+
+            if (calWeekStrip != null)
+            {
+                calWeekStrip.Children.Clear();
+                int deltaFromMonday = ((int)now.DayOfWeek + 6) % 7;
+                DateTime monday = now.Date.AddDays(-deltaFromMonday);
+
+                for (int i = 0; i < 7; i++)
+                {
+                    DateTime day = monday.AddDays(i);
+                    bool isToday = (day.Date == now.Date);
+                    string initial = DayInitials[(int)day.DayOfWeek];
+
+                    Border pill = new Border
+                    {
+                        Width = 15,
+                        Height = 27,
+                        CornerRadius = new CornerRadius(4.5),
+                        Background = isToday
+                            ? new SolidColorBrush(Color.FromRgb(28, 231, 85))
+                            : Brushes.Transparent,
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Margin = new Thickness(1.5, 0, 1.5, 0)
+                    };
+
+                    StackPanel pillStack = new StackPanel
+                    {
+                        VerticalAlignment = VerticalAlignment.Center
+                    };
+
+                    TextBlock tInit = new TextBlock
+                    {
+                        Text = initial,
+                        FontSize = 7.5,
+                        FontWeight = isToday ? FontWeights.Bold : FontWeights.Medium,
+                        Foreground = isToday
+                            ? Brushes.Black
+                            : new SolidColorBrush(Color.FromRgb(135, 135, 148)),
+                        HorizontalAlignment = HorizontalAlignment.Center
+                    };
+
+                    TextBlock tNum = new TextBlock
+                    {
+                        Text = day.Day.ToString(),
+                        FontSize = 8.5,
+                        FontWeight = isToday ? FontWeights.Bold : FontWeights.SemiBold,
+                        Foreground = isToday
+                            ? Brushes.Black
+                            : new SolidColorBrush(Color.FromRgb(215, 215, 225)),
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        Margin = new Thickness(0, 1, 0, 0)
+                    };
+
+                    pillStack.Children.Add(tInit);
+                    pillStack.Children.Add(tNum);
+                    pill.Child = pillStack;
+                    calWeekStrip.Children.Add(pill);
+                }
+            }
         }
 
         // =======================================================
@@ -4031,6 +4267,7 @@ namespace Glance
             if (collapsedMusicTimeText != null) collapsedMusicTimeText.Text = timeStr;
             expandedDateText.Text = dateStr;
 
+            UpdateCalendarUI(now);
             UpdateMediaTimelineUI();
 
             if (!IsCompanionWindow && CompanionInstance != null && CompanionInstance.IsVisible)
@@ -4082,9 +4319,9 @@ namespace Glance
                         TextBlock tb = lyricsStack.Children[i] as TextBlock;
                         if (tb == null) continue;
                         bool active = (i == activeLyricIndex);
-                        tb.Foreground = active ? Brushes.White : new SolidColorBrush(Color.FromRgb(130, 130, 142));
-                        tb.FontWeight = active ? FontWeights.Bold : FontWeights.SemiBold;
-                        tb.FontSize = active ? 13.5 : 12.5;
+                        tb.Foreground = active ? new SolidColorBrush(Color.FromRgb(28, 231, 85)) : new SolidColorBrush(Color.FromRgb(140, 140, 150));
+                        tb.FontWeight = active ? FontWeights.Bold : FontWeights.Normal;
+                        tb.FontSize = active ? 11.5 : 10;
                         if (active) tb.BringIntoView();
                     }
                 }
@@ -4273,8 +4510,8 @@ namespace Glance
                 ? new SolidColorBrush(Color.FromRgb(28, 231, 85))
                 : Brushes.White;
 
-            mediaStandardPanel.Visibility = showLyrics ? Visibility.Collapsed : Visibility.Visible;
-            lyricsPanel.Visibility = showLyrics ? Visibility.Visible : Visibility.Collapsed;
+            if (calendarPanel != null) calendarPanel.Visibility = showLyrics ? Visibility.Collapsed : Visibility.Visible;
+            if (lyricsPanel != null) lyricsPanel.Visibility = showLyrics ? Visibility.Visible : Visibility.Collapsed;
 
             if (showLyrics) FetchLyricsIfNeeded();
         }
@@ -4287,13 +4524,13 @@ namespace Glance
             {
                 loadedLyricsKey = "";
                 syncedLyrics.Clear();
-                lyricsHeaderText.Text = "Tidak ada media yang diputar";
+                lyricsHeaderText.Text = "Lirik Lagu";
                 lyricsStack.Children.Clear();
                 lyricsStack.Children.Add(new TextBlock
                 {
                     Text = "Putar lagu di Spotify / Browser untuk melihat lirik otomatis",
                     Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 160)),
-                    FontSize = 12,
+                    FontSize = 10.5,
                     TextAlignment = TextAlignment.Center,
                     TextWrapping = TextWrapping.Wrap,
                     Margin = new Thickness(0, 18, 0, 0)
@@ -4313,7 +4550,7 @@ namespace Glance
             {
                 Text = "Mencari lirik lagu...",
                 Foreground = new SolidColorBrush(Color.FromRgb(160, 160, 170)),
-                FontSize = 12,
+                FontSize = 10.5,
                 TextAlignment = TextAlignment.Center,
                 Margin = new Thickness(0, 22, 0, 0)
             });
@@ -4382,12 +4619,12 @@ namespace Glance
                             TextBlock tb = new TextBlock
                             {
                                 Text = l.Text,
-                                Foreground = new SolidColorBrush(Color.FromRgb(130, 130, 142)),
-                                FontSize = 12.5,
-                                FontWeight = FontWeights.SemiBold,
+                                Foreground = new SolidColorBrush(Color.FromRgb(140, 140, 150)),
+                                FontSize = 10,
+                                FontWeight = FontWeights.Normal,
                                 TextAlignment = TextAlignment.Center,
                                 TextWrapping = TextWrapping.Wrap,
-                                Margin = new Thickness(4, 3, 4, 3),
+                                Margin = new Thickness(2, 2, 2, 2),
                                 Cursor = Cursors.Hand
                             };
                             tb.MouseLeftButtonUp += (s, ev) =>
@@ -4407,10 +4644,10 @@ namespace Glance
                             {
                                 Text = line,
                                 Foreground = Brushes.White,
-                                FontSize = 12,
+                                FontSize = 10,
                                 TextAlignment = TextAlignment.Center,
                                 TextWrapping = TextWrapping.Wrap,
-                                Margin = new Thickness(4, 2, 4, 2)
+                                Margin = new Thickness(2, 2, 2, 2)
                             });
                         }
                     }
@@ -4420,7 +4657,7 @@ namespace Glance
                         {
                             Text = "Lirik belum tersedia untuk lagu ini",
                             Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 160)),
-                            FontSize = 12,
+                            FontSize = 10.5,
                             TextAlignment = TextAlignment.Center,
                             Margin = new Thickness(0, 22, 0, 0)
                         });

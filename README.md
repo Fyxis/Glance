@@ -28,10 +28,14 @@ Unlike heavy modern utilities wrapped in Electron or Chromium that devour hundre
 * **Translucent Frosted Glass**: Modern acrylic glass styling with customizable opacity slider in Settings (`⚙️`).
 * **Pin Mode**: Lock Glance in expanded view or let it auto-collapse gracefully when your mouse leaves.
 
-### 🎵 2. Interactive Media Player & Live Waveform
-* **Dynamic Waveform Animation**: Five responsive waveform bars that dance in real-time to your system audio peak level (`IAudioMeterInformation`).
-* **Adaptive Color Palette**: Automatically extracts the vibrant dominant accent color from the active song's album art to dynamically tint the waveform bars.
-* **Full Media Controls**: Play, pause, skip, rewind, and interactive seekbar with live timestamp tracking powered by Windows Universal Media Session (`GSMTC`).
+### 🎵 2. Interactive Media Player, Dual-Column HUD & Synced Lyrics
+* **Split 2-Column Slide Layout**: Slide pertama kini dibagi menjadi dua kolom elegan berdampingan:
+  - **Kolom Kiri (Media Player)**: Cover Album (46×46), judul lagu, artis, timeline seekbar interaktif dengan live timestamp, serta tombol kontrol lengkap (Previous, Play/Pause circular button, Next, dan tombol toggle lirik). Kontrol musik tetap aktif dan bisa diakses kapan saja.
+  - **Kolom Kanan (Widget Kalender & Lirik Lagu Interaktif)**:
+    - **Default (Widget Kalender Estetik)**: Menampilkan nama hari (misal `JUMAT`), tanggal berukuran besar, bulan & tahun (`Oktober 2026`), serta 7-day mini week strip (Senin–Minggu) dengan hari ini disorot pill hijau zamrud. Klik pada widget kalender untuk langsung membuka Jam / Kalender Windows (`ms-clock:`).
+    - **Mode Lirik Lagu (`♪`)**: Klik tombol lirik pada kontrol media untuk mengubah kolom kanan menjadi tampilan lirik lagu yang tersinkronisasi (*synced live scrolling lyrics*) secara otomatis via API LRCLIB. Klik lirik baris mana saja untuk melompat (*seek*) ke bagian lagu tersebut.
+* **Dynamic Waveform Animation**: Lima batang gelombang audio (*waveform bars*) yang bergerak responsif mengikuti peak level suara sistem (`IAudioMeterInformation`) saat notch dalam mode collapsed.
+* **Adaptive Color Palette**: Mengekstrak warna aksen dominan dari cover album lagu yang sedang diputar untuk mewarnai bar waveform secara dinamis.
 
 ### ⚡ 3. Real-Time Network Speed Monitor
 * Displays live download (`↓`) and upload (`↑`) throughput directly on the collapsed pill and expanded system card.
