@@ -61,6 +61,42 @@ namespace Glance
         public int backgroundAlpha { get; set; }
         public bool isPinned { get; set; }
         public string displayMode { get; set; }
+
+        public string colorAccent { get; set; }
+        public string colorBattery { get; set; }
+        public string colorCpu { get; set; }
+        public string colorRam { get; set; }
+        public string colorDisk { get; set; }
+        public string colorSound { get; set; }
+        public string colorBrightness { get; set; }
+        public string colorWifi { get; set; }
+
+        public bool showSlideMedia { get; set; }
+        public bool showSlideSystem { get; set; }
+        public bool showSlideControl { get; set; }
+        public bool showSlideClipboard { get; set; }
+        public bool showSlideNotes { get; set; }
+        public bool showSlideShelf { get; set; }
+
+        public AppConfig()
+        {
+            backgroundAlpha = 175;
+            displayMode = "screen1";
+            colorAccent = "#1CE755";
+            colorBattery = "#1CE755";
+            colorCpu = "#38BDF8";
+            colorRam = "#C084FC";
+            colorDisk = "#34D399";
+            colorSound = "#38BDF8";
+            colorBrightness = "#FBBF24";
+            colorWifi = "#10B981";
+            showSlideMedia = true;
+            showSlideSystem = true;
+            showSlideControl = true;
+            showSlideClipboard = true;
+            showSlideNotes = true;
+            showSlideShelf = true;
+        }
     }
 
     public class LyricLine
@@ -1348,21 +1384,51 @@ namespace Glance
 
     public class SettingsWindow : Window
     {
+        private MainWindow parentIsland;
+
+        // Tab 1: Umum
         private CheckBox chkStartup;
         private CheckBox chkPin;
-        private Slider sliderAlpha;
-        private TextBlock lblAlphaVal;
         private RadioButton rbScreen1;
         private RadioButton rbScreen2;
         private RadioButton rbScreenBoth;
-        private MainWindow parentIsland;
+        private Slider sliderAlpha;
+        private TextBlock lblAlphaVal;
+
+        // Tab 2: Kustom Warna
+        private string tempColorAccent;
+        private string tempColorBattery;
+        private string tempColorCpu;
+        private string tempColorRam;
+        private string tempColorDisk;
+        private string tempColorSound;
+        private string tempColorBrightness;
+        private string tempColorWifi;
+        private StackPanel colorsContentStack;
+
+        // Tab 3: Kelola Slide
+        private CheckBox chkSlideMedia;
+        private CheckBox chkSlideSystem;
+        private CheckBox chkSlideControl;
+        private CheckBox chkSlideClipboard;
+        private CheckBox chkSlideNotes;
+        private CheckBox chkSlideShelf;
+
+        // Tab Navigation
+        private Border tabBtnGeneral;
+        private Border tabBtnColors;
+        private Border tabBtnSlides;
+        private ScrollViewer scrollGeneral;
+        private ScrollViewer scrollColors;
+        private ScrollViewer scrollSlides;
+        private Button saveBtn;
 
         public SettingsWindow(MainWindow owner)
         {
             parentIsland = owner;
             Title = "Glance — Pengaturan";
-            Width = 430;
-            Height = 525;
+            Width = 490;
+            Height = 630;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
             ResizeMode = ResizeMode.NoResize;
             WindowStyle = WindowStyle.None;
@@ -1371,30 +1437,35 @@ namespace Glance
             Topmost = true;
             Closed += (s, e) => MemoryOptimizer.TrimMemory();
 
+            tempColorAccent = parentIsland != null ? (parentIsland.ColorAccent ?? "#1CE755") : "#1CE755";
+            tempColorBattery = parentIsland != null ? (parentIsland.ColorBattery ?? "#1CE755") : "#1CE755";
+            tempColorCpu = parentIsland != null ? (parentIsland.ColorCpu ?? "#38BDF8") : "#38BDF8";
+            tempColorRam = parentIsland != null ? (parentIsland.ColorRam ?? "#C084FC") : "#C084FC";
+            tempColorDisk = parentIsland != null ? (parentIsland.ColorDisk ?? "#34D399") : "#34D399";
+            tempColorSound = parentIsland != null ? (parentIsland.ColorSound ?? "#38BDF8") : "#38BDF8";
+            tempColorBrightness = parentIsland != null ? (parentIsland.ColorBrightness ?? "#FBBF24") : "#FBBF24";
+            tempColorWifi = parentIsland != null ? (parentIsland.ColorWifi ?? "#10B981") : "#10B981";
+
             Border outer = new Border
             {
-                Background = new SolidColorBrush(Color.FromArgb(230, 16, 16, 20)),
+                Background = new SolidColorBrush(Color.FromArgb(242, 16, 16, 22)),
                 BorderBrush = new SolidColorBrush(Color.FromRgb(48, 48, 56)),
                 BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(16),
-                Padding = new Thickness(22),
-                Effect = new DropShadowEffect { BlurRadius = 24, ShadowDepth = 6, Opacity = 0.6, Color = Colors.Black }
+                CornerRadius = new CornerRadius(18),
+                Padding = new Thickness(20, 18, 20, 18),
+                Effect = new DropShadowEffect { BlurRadius = 28, ShadowDepth = 6, Opacity = 0.65, Color = Colors.Black }
             };
 
             outer.MouseLeftButtonDown += (s, e) => { if (e.ButtonState == MouseButtonState.Pressed) DragMove(); };
 
-            StackPanel root = new StackPanel();
+            Grid root = new Grid();
+            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(44) }); // Header
+            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(40) }); // Tab bar
+            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // Content
+            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(48) }); // Save button
 
-            // Header
-            DockPanel header = new DockPanel { Margin = new Thickness(0, 0, 0, 14) };
-            TextBlock title = new TextBlock
-            {
-                Text = "Pengaturan Glance",
-                Foreground = Brushes.White,
-                FontSize = 16,
-                FontWeight = FontWeights.Bold,
-                VerticalAlignment = VerticalAlignment.Center
-            };
+            // 1. Header
+            DockPanel header = new DockPanel { VerticalAlignment = VerticalAlignment.Center };
             Button closeBtn = new Button
             {
                 Content = "✕",
@@ -1409,10 +1480,158 @@ namespace Glance
             DockPanel.SetDock(closeBtn, Dock.Right);
             closeBtn.Click += (s, e) => Close();
             header.Children.Add(closeBtn);
-            header.Children.Add(title);
+
+            StackPanel titleStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            titleStack.Children.Add(new TextBlock
+            {
+                Text = "Pengaturan Glance",
+                Foreground = Brushes.White,
+                FontSize = 16,
+                FontWeight = FontWeights.Bold
+            });
+            titleStack.Children.Add(new TextBlock
+            {
+                Text = "Kustomisasi Tampilan, Warna Per Area & Fitur Slide",
+                Foreground = new SolidColorBrush(Color.FromRgb(140, 140, 155)),
+                FontSize = 10.5,
+                Margin = new Thickness(0, 1, 0, 0)
+            });
+            header.Children.Add(titleStack);
+            Grid.SetRow(header, 0);
             root.Children.Add(header);
 
-            // Option 1: Run at Startup Windows
+            // 2. Tab Bar
+            Grid tabBar = new Grid { Margin = new Thickness(0, 6, 0, 4) };
+            tabBar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            tabBar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(6) });
+            tabBar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            tabBar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(6) });
+            tabBar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            tabBtnGeneral = CreateTabButton("⚙️ Umum", () => SelectTab(0));
+            Grid.SetColumn(tabBtnGeneral, 0);
+
+            tabBtnColors = CreateTabButton("🎨 Kustom Warna", () => SelectTab(1));
+            Grid.SetColumn(tabBtnColors, 2);
+
+            tabBtnSlides = CreateTabButton("📑 Kelola Slide", () => SelectTab(2));
+            Grid.SetColumn(tabBtnSlides, 4);
+
+            tabBar.Children.Add(tabBtnGeneral);
+            tabBar.Children.Add(tabBtnColors);
+            tabBar.Children.Add(tabBtnSlides);
+            Grid.SetRow(tabBar, 1);
+            root.Children.Add(tabBar);
+
+            // 3. Tab Content Hosts
+            Grid contentHost = new Grid { Margin = new Thickness(0, 8, 0, 0) };
+
+            scrollGeneral = BuildGeneralTab();
+            scrollColors = BuildColorsTab();
+            scrollSlides = BuildSlidesTab();
+
+            contentHost.Children.Add(scrollGeneral);
+            contentHost.Children.Add(scrollColors);
+            contentHost.Children.Add(scrollSlides);
+            Grid.SetRow(contentHost, 2);
+            root.Children.Add(contentHost);
+
+            // 4. Save Button
+            saveBtn = new Button
+            {
+                Content = "Simpan Pengaturan",
+                Height = 38,
+                Background = new SolidColorBrush(MainWindow.ColorFromHex(tempColorAccent, Color.FromRgb(28, 231, 85))),
+                Foreground = Brushes.Black,
+                FontWeight = FontWeights.Bold,
+                FontSize = 13,
+                BorderThickness = new Thickness(0),
+                Cursor = Cursors.Hand,
+                VerticalAlignment = VerticalAlignment.Bottom
+            };
+            saveBtn.Click += (s, e) => OnSaveClicked();
+            Grid.SetRow(saveBtn, 3);
+            root.Children.Add(saveBtn);
+
+            SelectTab(0);
+
+            outer.Child = root;
+            Content = outer;
+        }
+
+        private Border CreateTabButton(string text, Action onClick)
+        {
+            Border btn = new Border
+            {
+                Height = 32,
+                CornerRadius = new CornerRadius(8),
+                Cursor = Cursors.Hand
+            };
+            TextBlock tb = new TextBlock
+            {
+                Text = text,
+                FontSize = 12,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            btn.Child = tb;
+            btn.MouseLeftButtonUp += (s, e) => { e.Handled = true; onClick(); };
+            return btn;
+        }
+
+        private void SelectTab(int index)
+        {
+            scrollGeneral.Visibility = (index == 0) ? Visibility.Visible : Visibility.Collapsed;
+            scrollColors.Visibility = (index == 1) ? Visibility.Visible : Visibility.Collapsed;
+            scrollSlides.Visibility = (index == 2) ? Visibility.Visible : Visibility.Collapsed;
+
+            StyleTabButton(tabBtnGeneral, index == 0);
+            StyleTabButton(tabBtnColors, index == 1);
+            StyleTabButton(tabBtnSlides, index == 2);
+        }
+
+        private void StyleTabButton(Border btn, bool isSelected)
+        {
+            Color accent = MainWindow.ColorFromHex(tempColorAccent, Color.FromRgb(28, 231, 85));
+            btn.Background = isSelected
+                ? new SolidColorBrush(accent)
+                : new SolidColorBrush(Color.FromArgb(28, 255, 255, 255));
+            btn.BorderBrush = isSelected
+                ? new SolidColorBrush(accent)
+                : new SolidColorBrush(Color.FromArgb(35, 255, 255, 255));
+            btn.BorderThickness = new Thickness(1);
+
+            TextBlock tb = btn.Child as TextBlock;
+            if (tb != null)
+            {
+                tb.Foreground = isSelected ? Brushes.Black : new SolidColorBrush(Color.FromRgb(220, 220, 230));
+                tb.FontWeight = isSelected ? FontWeights.Bold : FontWeights.SemiBold;
+            }
+        }
+
+        private void UpdateAccentVisuals()
+        {
+            Color accent = MainWindow.ColorFromHex(tempColorAccent, Color.FromRgb(28, 231, 85));
+            if (saveBtn != null) saveBtn.Background = new SolidColorBrush(accent);
+            StyleTabButton(tabBtnGeneral, scrollGeneral.Visibility == Visibility.Visible);
+            StyleTabButton(tabBtnColors, scrollColors.Visibility == Visibility.Visible);
+            StyleTabButton(tabBtnSlides, scrollSlides.Visibility == Visibility.Visible);
+        }
+
+        // =======================================================
+        // TAB 1: UMUM (GENERAL & DISPLAY)
+        // =======================================================
+        private ScrollViewer BuildGeneralTab()
+        {
+            ScrollViewer sv = new ScrollViewer
+            {
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                Padding = new Thickness(0, 0, 4, 0)
+            };
+            StackPanel sp = new StackPanel();
+
+            // Option 1: Run at Startup
             Border cardStartup = CreateOptionCard();
             chkStartup = new CheckBox
             {
@@ -1425,7 +1644,7 @@ namespace Glance
                 VerticalContentAlignment = VerticalAlignment.Center
             };
             cardStartup.Child = chkStartup;
-            root.Children.Add(cardStartup);
+            sp.Children.Add(cardStartup);
 
             // Option 2: Pin Expanded
             Border cardPin = CreateOptionCard();
@@ -1440,9 +1659,9 @@ namespace Glance
                 VerticalContentAlignment = VerticalAlignment.Center
             };
             cardPin.Child = chkPin;
-            root.Children.Add(cardPin);
+            sp.Children.Add(cardPin);
 
-            // Option 3: Multi-Monitor Display Option
+            // Option 3: Multi-Monitor Display
             Border cardScreen = CreateOptionCard();
             StackPanel spScreen = new StackPanel();
 
@@ -1499,7 +1718,7 @@ namespace Glance
             spScreen.Children.Add(rbScreen2);
             spScreen.Children.Add(rbScreenBoth);
             cardScreen.Child = spScreen;
-            root.Children.Add(cardScreen);
+            sp.Children.Add(cardScreen);
 
             // Option 4: Background Transparency Slider
             Border cardAlpha = CreateOptionCard();
@@ -1510,7 +1729,7 @@ namespace Glance
             lblAlphaVal = new TextBlock
             {
                 Text = curPct + "%",
-                Foreground = new SolidColorBrush(Color.FromRgb(28, 231, 85)),
+                Foreground = new SolidColorBrush(MainWindow.ColorFromHex(tempColorAccent, Color.FromRgb(28, 231, 85))),
                 FontSize = 12,
                 FontWeight = FontWeights.Bold,
                 HorizontalAlignment = HorizontalAlignment.Right
@@ -1544,49 +1763,416 @@ namespace Glance
             spAlpha.Children.Add(dpAlpha);
             spAlpha.Children.Add(sliderAlpha);
             cardAlpha.Child = spAlpha;
-            root.Children.Add(cardAlpha);
+            sp.Children.Add(cardAlpha);
 
             TextBlock shortcutHint = new TextBlock
             {
-                Text = "💡 Tekan Ctrl + Shift + P kapan saja untuk membuka Glance Search (Pencarian Aplikasi).",
+                Text = "💡 Tekan Ctrl + Shift + P kapan saja untuk membuka Glance Search (Pencarian Aplikasi Cepat).",
                 Foreground = new SolidColorBrush(Color.FromRgb(165, 165, 178)),
                 FontSize = 11.5,
                 TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(2, 2, 2, 10)
+                Margin = new Thickness(2, 4, 2, 8)
             };
-            root.Children.Add(shortcutHint);
+            sp.Children.Add(shortcutHint);
 
-            // Save Button
-            Button saveBtn = new Button
+            sv.Content = sp;
+            return sv;
+        }
+
+        // =======================================================
+        // TAB 2: KUSTOM WARNA PER AREA
+        // =======================================================
+        private ScrollViewer BuildColorsTab()
+        {
+            ScrollViewer sv = new ScrollViewer
             {
-                Content = "Simpan Pengaturan",
-                Height = 36,
-                Background = new SolidColorBrush(Color.FromRgb(28, 231, 85)),
-                Foreground = Brushes.Black,
-                FontWeight = FontWeights.Bold,
-                FontSize = 13,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                Padding = new Thickness(0, 0, 4, 0)
+            };
+            colorsContentStack = new StackPanel();
+            RenderColorCards();
+            sv.Content = colorsContentStack;
+            return sv;
+        }
+
+        private void RenderColorCards()
+        {
+            colorsContentStack.Children.Clear();
+
+            TextBlock info = new TextBlock
+            {
+                Text = "Pilih warna preset atau ketik kode HEX kustom untuk setiap area tampilan:",
+                Foreground = new SolidColorBrush(Color.FromRgb(175, 175, 190)),
+                FontSize = 11.5,
+                Margin = new Thickness(2, 0, 2, 8)
+            };
+            colorsContentStack.Children.Add(info);
+
+            colorsContentStack.Children.Add(CreateColorSettingCard(
+                "Tema Aksen Utama",
+                "Warna aksen kalender, lirik aktif, tombol kontrol, dan slider.",
+                tempColorAccent,
+                c => { tempColorAccent = c; UpdateAccentVisuals(); }
+            ));
+
+            colorsContentStack.Children.Add(CreateColorSettingCard(
+                "Area Baterai",
+                "Lingkaran ring baterai di notch collapsed, header & bar status baterai.",
+                tempColorBattery,
+                c => tempColorBattery = c
+            ));
+
+            colorsContentStack.Children.Add(CreateColorSettingCard(
+                "Area CPU (Prosesor)",
+                "Meteran bar & teks persentase aktivitas prosesor.",
+                tempColorCpu,
+                c => tempColorCpu = c
+            ));
+
+            colorsContentStack.Children.Add(CreateColorSettingCard(
+                "Area RAM (Memori)",
+                "Meteran bar & teks persentase penggunaan memori RAM.",
+                tempColorRam,
+                c => tempColorRam = c
+            ));
+
+            colorsContentStack.Children.Add(CreateColorSettingCard(
+                "Area Partisi Disk",
+                "Meteran bar kapasitas penyimpanan drive harddisk / SSD (C:, D:).",
+                tempColorDisk,
+                c => tempColorDisk = c
+            ));
+
+            colorsContentStack.Children.Add(CreateColorSettingCard(
+                "Area Suara (Sound)",
+                "Slider volume suara sistem di Control Center.",
+                tempColorSound,
+                c => tempColorSound = c
+            ));
+
+            colorsContentStack.Children.Add(CreateColorSettingCard(
+                "Area Kecerahan Layar",
+                "Slider pengatur tingkat kecerahan layar monitor di Control Center.",
+                tempColorBrightness,
+                c => tempColorBrightness = c
+            ));
+
+            colorsContentStack.Children.Add(CreateColorSettingCard(
+                "Area Wi-Fi & Internet",
+                "Indikator pill sinyal dan teks status koneksi Wi-Fi.",
+                tempColorWifi,
+                c => tempColorWifi = c
+            ));
+
+            Button btnResetColors = new Button
+            {
+                Content = "↺ Kembalikan Semua Warna ke Standar",
+                Height = 32,
+                Background = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
+                Foreground = new SolidColorBrush(Color.FromRgb(220, 220, 230)),
+                FontSize = 12,
+                FontWeight = FontWeights.SemiBold,
                 BorderThickness = new Thickness(0),
-                Cursor = Cursors.Hand
+                Cursor = Cursors.Hand,
+                Margin = new Thickness(0, 4, 0, 10)
             };
-            saveBtn.Click += (s, e) =>
+            btnResetColors.Click += (s, e) =>
             {
-                StartupManager.SetStartup(chkStartup.IsChecked == true);
-                string selectedMode = "screen1";
-                if (rbScreen2.IsChecked == true) selectedMode = "screen2";
-                else if (rbScreenBoth.IsChecked == true) selectedMode = "both";
-                MainWindow.ApplyDisplayMode(selectedMode);
-
-                if (parentIsland != null)
-                {
-                    parentIsland.SetPinned(chkPin.IsChecked == true);
-                    parentIsland.SaveAppConfig();
-                }
-                Close();
+                tempColorAccent = "#1CE755";
+                tempColorBattery = "#1CE755";
+                tempColorCpu = "#38BDF8";
+                tempColorRam = "#C084FC";
+                tempColorDisk = "#34D399";
+                tempColorSound = "#38BDF8";
+                tempColorBrightness = "#FBBF24";
+                tempColorWifi = "#10B981";
+                UpdateAccentVisuals();
+                RenderColorCards();
             };
-            root.Children.Add(saveBtn);
+            colorsContentStack.Children.Add(btnResetColors);
+        }
 
-            outer.Child = root;
-            Content = outer;
+        private Border CreateColorSettingCard(string title, string subtitle, string initialHex, Action<string> onColorPicked)
+        {
+            Border card = CreateOptionCard();
+            StackPanel sp = new StackPanel();
+
+            DockPanel top = new DockPanel { Margin = new Thickness(0, 0, 0, 7) };
+
+            Border swatch = new Border
+            {
+                Width = 22,
+                Height = 22,
+                CornerRadius = new CornerRadius(11),
+                Background = new SolidColorBrush(MainWindow.ColorFromHex(initialHex, Colors.White)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(120, 255, 255, 255)),
+                BorderThickness = new Thickness(1.5),
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Center,
+                ToolTip = "Warna saat ini"
+            };
+            DockPanel.SetDock(swatch, Dock.Right);
+            top.Children.Add(swatch);
+
+            StackPanel labelStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            TextBlock lblTitle = new TextBlock
+            {
+                Text = title,
+                Foreground = Brushes.White,
+                FontSize = 12.5,
+                FontWeight = FontWeights.Bold
+            };
+            TextBlock lblSub = new TextBlock
+            {
+                Text = subtitle,
+                Foreground = new SolidColorBrush(Color.FromRgb(160, 160, 175)),
+                FontSize = 10.5,
+                Margin = new Thickness(0, 1, 0, 0)
+            };
+            labelStack.Children.Add(lblTitle);
+            labelStack.Children.Add(lblSub);
+            top.Children.Add(labelStack);
+
+            sp.Children.Add(top);
+
+            WrapPanel swatchesPanel = new WrapPanel
+            {
+                Orientation = Orientation.Horizontal,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            string[] palette = {
+                "#1CE755", // Emerald Green
+                "#00E5FF", // Cyan
+                "#38BDF8", // Sky Blue
+                "#A855F7", // Neon Violet
+                "#EC4899", // Hot Pink
+                "#F59E0B", // Sunset Amber
+                "#EF4444", // Red
+                "#FFFFFF"  // White
+            };
+
+            TextBox hexBox = null;
+
+            foreach (string hex in palette)
+            {
+                string h = hex;
+                Border pill = new Border
+                {
+                    Width = 20,
+                    Height = 20,
+                    CornerRadius = new CornerRadius(10),
+                    Background = new SolidColorBrush(MainWindow.ColorFromHex(h, Colors.White)),
+                    BorderBrush = new SolidColorBrush(Color.FromArgb(70, 255, 255, 255)),
+                    BorderThickness = new Thickness(1),
+                    Margin = new Thickness(0, 0, 7, 0),
+                    Cursor = Cursors.Hand,
+                    ToolTip = h
+                };
+                pill.MouseLeftButtonUp += (s, e) =>
+                {
+                    e.Handled = true;
+                    swatch.Background = new SolidColorBrush(MainWindow.ColorFromHex(h, Colors.White));
+                    if (hexBox != null) hexBox.Text = h;
+                    onColorPicked(h);
+                };
+                swatchesPanel.Children.Add(pill);
+            }
+
+            hexBox = new TextBox
+            {
+                Text = initialHex,
+                Width = 75,
+                Height = 22,
+                FontSize = 11,
+                Foreground = Brushes.White,
+                Background = new SolidColorBrush(Color.FromArgb(50, 255, 255, 255)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(60, 255, 255, 255)),
+                BorderThickness = new Thickness(1),
+                VerticalContentAlignment = VerticalAlignment.Center,
+                Padding = new Thickness(4, 0, 2, 0),
+                Margin = new Thickness(4, 0, 0, 0),
+                ToolTip = "Ketik kode warna HEX (contoh: #1CE755)"
+            };
+            hexBox.TextChanged += (s, e) =>
+            {
+                string text = hexBox.Text.Trim();
+                if ((text.Length == 7 && text.StartsWith("#")) || text.Length == 6)
+                {
+                    Color c = MainWindow.ColorFromHex(text, Colors.Transparent);
+                    if (c.A > 0)
+                    {
+                        swatch.Background = new SolidColorBrush(c);
+                        onColorPicked(text);
+                    }
+                }
+            };
+            swatchesPanel.Children.Add(hexBox);
+
+            sp.Children.Add(swatchesPanel);
+            card.Child = sp;
+            return card;
+        }
+
+        // =======================================================
+        // TAB 3: KELOLA SLIDE (SLIDE VISIBILITY TOGGLE)
+        // =======================================================
+        private ScrollViewer BuildSlidesTab()
+        {
+            ScrollViewer sv = new ScrollViewer
+            {
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                Padding = new Thickness(0, 0, 4, 0)
+            };
+            StackPanel sp = new StackPanel();
+
+            TextBlock info = new TextBlock
+            {
+                Text = "Pilih slide apa saja yang ingin ditampilkan di dalam carousel notch Glance:",
+                Foreground = new SolidColorBrush(Color.FromRgb(175, 175, 190)),
+                FontSize = 11.5,
+                Margin = new Thickness(2, 0, 2, 8)
+            };
+            sp.Children.Add(info);
+
+            sp.Children.Add(CreateSlideCheckCard(
+                "🎵 Media Player & Kalender / Lirik",
+                "Pemutar lagu GSMTC, cover album, seekbar, lirik otomatis, dan widget kalender 7 hari.",
+                parentIsland == null || parentIsland.ShowSlideMedia,
+                out chkSlideMedia
+            ));
+
+            sp.Children.Add(CreateSlideCheckCard(
+                "⚡ Status Sistem & Disk Storage",
+                "Monitor real-time daya baterai, CPU load, RAM fisik, serta kapasitas partisi drive C:/D:.",
+                parentIsland == null || parentIsland.ShowSlideSystem,
+                out chkSlideSystem
+            ));
+
+            sp.Children.Add(CreateSlideCheckCard(
+                "🎛️ Control Center (Wi-Fi, Suara, Kecerahan)",
+                "Informasi Wi-Fi & internet speed, slider volume suara, dan slider kecerahan monitor.",
+                parentIsland == null || parentIsland.ShowSlideControl,
+                out chkSlideControl
+            ));
+
+            sp.Children.Add(CreateSlideCheckCard(
+                "📋 Riwayat Clipboard",
+                "Pencatat otomatis snippet teks yang disalin ke clipboard dengan fitur pin favorit.",
+                parentIsland == null || parentIsland.ShowSlideClipboard,
+                out chkSlideClipboard
+            ));
+
+            sp.Children.Add(CreateSlideCheckCard(
+                "📝 Catatan Cepat (Quick Notes)",
+                "Scratchpad to-do list & catatan kilat tanpa perlu membuka aplikasi teks pihak ketiga.",
+                parentIsland == null || parentIsland.ShowSlideNotes,
+                out chkSlideNotes
+            ));
+
+            sp.Children.Add(CreateSlideCheckCard(
+                "📥 File Shelf (Tampung & Drag File)",
+                "Area drop-zone untuk menampung file dari Explorer dan drag langsung ke WhatsApp/Discord.",
+                parentIsland == null || parentIsland.ShowSlideShelf,
+                out chkSlideShelf
+            ));
+
+            TextBlock tip = new TextBlock
+            {
+                Text = "💡 Tips: Minimal 1 slide harus tetap dicentang agar carousel notch tetap dapat berfungsi.",
+                Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 165)),
+                FontSize = 11,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(2, 4, 2, 10)
+            };
+            sp.Children.Add(tip);
+
+            sv.Content = sp;
+            return sv;
+        }
+
+        private Border CreateSlideCheckCard(string title, string desc, bool isChecked, out CheckBox chkOut)
+        {
+            Border card = CreateOptionCard();
+            StackPanel sp = new StackPanel();
+
+            CheckBox chk = new CheckBox
+            {
+                Content = title,
+                Foreground = Brushes.White,
+                FontSize = 13,
+                FontWeight = FontWeights.Bold,
+                IsChecked = isChecked,
+                Cursor = Cursors.Hand,
+                VerticalContentAlignment = VerticalAlignment.Center
+            };
+            chkOut = chk;
+
+            TextBlock tbDesc = new TextBlock
+            {
+                Text = desc,
+                Foreground = new SolidColorBrush(Color.FromRgb(160, 160, 175)),
+                FontSize = 10.5,
+                Margin = new Thickness(24, 2, 0, 0),
+                TextWrapping = TextWrapping.Wrap
+            };
+
+            sp.Children.Add(chk);
+            sp.Children.Add(tbDesc);
+            card.Child = sp;
+            return card;
+        }
+
+        private void OnSaveClicked()
+        {
+            StartupManager.SetStartup(chkStartup.IsChecked == true);
+            string selectedMode = "screen1";
+            if (rbScreen2.IsChecked == true) selectedMode = "screen2";
+            else if (rbScreenBoth.IsChecked == true) selectedMode = "both";
+            MainWindow.ApplyDisplayMode(selectedMode);
+
+            if (parentIsland != null)
+            {
+                parentIsland.SetPinned(chkPin.IsChecked == true);
+
+                // Colors
+                parentIsland.ColorAccent = tempColorAccent;
+                parentIsland.ColorBattery = tempColorBattery;
+                parentIsland.ColorCpu = tempColorCpu;
+                parentIsland.ColorRam = tempColorRam;
+                parentIsland.ColorDisk = tempColorDisk;
+                parentIsland.ColorSound = tempColorSound;
+                parentIsland.ColorBrightness = tempColorBrightness;
+                parentIsland.ColorWifi = tempColorWifi;
+
+                // Slides (Ensure at least 1 is active)
+                bool m = chkSlideMedia.IsChecked == true;
+                bool s = chkSlideSystem.IsChecked == true;
+                bool c = chkSlideControl.IsChecked == true;
+                bool cl = chkSlideClipboard.IsChecked == true;
+                bool n = chkSlideNotes.IsChecked == true;
+                bool sh = chkSlideShelf.IsChecked == true;
+
+                if (!m && !s && !c && !cl && !n && !sh)
+                {
+                    m = true;
+                }
+
+                parentIsland.ShowSlideMedia = m;
+                parentIsland.ShowSlideSystem = s;
+                parentIsland.ShowSlideControl = c;
+                parentIsland.ShowSlideClipboard = cl;
+                parentIsland.ShowSlideNotes = n;
+                parentIsland.ShowSlideShelf = sh;
+
+                parentIsland.ApplyCustomColors();
+                parentIsland.ApplySlideVisibilityConfig();
+                parentIsland.SaveAppConfig();
+            }
+
+            Close();
         }
 
         private Border CreateOptionCard()
@@ -1597,8 +2183,8 @@ namespace Glance
                 BorderBrush = new SolidColorBrush(Color.FromRgb(48, 48, 56)),
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(10),
-                Padding = new Thickness(12, 10, 12, 10),
-                Margin = new Thickness(0, 0, 0, 10)
+                Padding = new Thickness(12, 9, 12, 9),
+                Margin = new Thickness(0, 0, 0, 8)
             };
         }
     }
@@ -1636,6 +2222,24 @@ namespace Glance
         private bool isInputFocused = false;
         private int currentSlide = 0;
 
+        // Customizable Area Colors
+        public string ColorAccent { get; set; }
+        public string ColorBattery { get; set; }
+        public string ColorCpu { get; set; }
+        public string ColorRam { get; set; }
+        public string ColorDisk { get; set; }
+        public string ColorSound { get; set; }
+        public string ColorBrightness { get; set; }
+        public string ColorWifi { get; set; }
+
+        // Customizable Slide Visibility
+        public bool ShowSlideMedia { get; set; }
+        public bool ShowSlideSystem { get; set; }
+        public bool ShowSlideControl { get; set; }
+        public bool ShowSlideClipboard { get; set; }
+        public bool ShowSlideNotes { get; set; }
+        public bool ShowSlideShelf { get; set; }
+
         private SolidColorBrush notchBgBrush;
         private static SpotlightWindow spotlightWin;
 
@@ -1648,12 +2252,27 @@ namespace Glance
         private TextBlock expandedTimeText;
         private Path collapsedBatteryArc;
         private Path expandedBatteryArc;
+        private Ellipse collapsedBatteryBgRing;
+        private Ellipse expandedBatteryBgRing;
         private Border pinBtnBorder;
         private TextBlock pinBtnIcon;
 
-        // Slides & Dots (5 slides)
+        // Slides & Dynamic Dots
         private Grid[] slidePanels = new Grid[SlideCount];
-        private Border[] dotPills = new Border[SlideCount];
+        private StackPanel dotsPanel;
+        private List<Border> activeDotPills = new List<Border>();
+        private List<int> activeSlideIndices = new List<int>();
+        private Border prevSlideBtn;
+        private Border nextSlideBtn;
+        private string[] slideTitles =
+        {
+            "Media Player & Kalender / Lirik",
+            "Baterai, CPU, RAM & Disk (C: / D:)",
+            "Wi-Fi, Sound & Brightness",
+            "Riwayat Clipboard",
+            "Catatan Cepat",
+            "File Shelf (Tampung & Drag File)"
+        };
 
         // Slide 0: Media Player + Calendar / Lyrics UI
         private Grid mediaStandardPanel;
@@ -1794,6 +2413,20 @@ namespace Glance
             }
 
             BackgroundAlpha = 175;
+            ColorAccent = "#1CE755";
+            ColorBattery = "#1CE755";
+            ColorCpu = "#38BDF8";
+            ColorRam = "#C084FC";
+            ColorDisk = "#34D399";
+            ColorSound = "#38BDF8";
+            ColorBrightness = "#FBBF24";
+            ColorWifi = "#10B981";
+            ShowSlideMedia = true;
+            ShowSlideSystem = true;
+            ShowSlideControl = true;
+            ShowSlideClipboard = true;
+            ShowSlideNotes = true;
+            ShowSlideShelf = true;
             string oldDir = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WindowsDynamicIsland");
             dataDir = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Glance");
             Directory.CreateDirectory(dataDir);
@@ -1823,6 +2456,23 @@ namespace Glance
             {
                 BackgroundAlpha = PrimaryInstance.BackgroundAlpha;
                 IsPinned = PrimaryInstance.IsPinned;
+
+                ColorAccent = PrimaryInstance.ColorAccent;
+                ColorBattery = PrimaryInstance.ColorBattery;
+                ColorCpu = PrimaryInstance.ColorCpu;
+                ColorRam = PrimaryInstance.ColorRam;
+                ColorDisk = PrimaryInstance.ColorDisk;
+                ColorSound = PrimaryInstance.ColorSound;
+                ColorBrightness = PrimaryInstance.ColorBrightness;
+                ColorWifi = PrimaryInstance.ColorWifi;
+
+                ShowSlideMedia = PrimaryInstance.ShowSlideMedia;
+                ShowSlideSystem = PrimaryInstance.ShowSlideSystem;
+                ShowSlideControl = PrimaryInstance.ShowSlideControl;
+                ShowSlideClipboard = PrimaryInstance.ShowSlideClipboard;
+                ShowSlideNotes = PrimaryInstance.ShowSlideNotes;
+                ShowSlideShelf = PrimaryInstance.ShowSlideShelf;
+
                 notesList = new List<NoteItem>(PrimaryInstance.notesList);
                 clipList = new List<ClipItem>(PrimaryInstance.clipList);
                 shelfList = new List<ShelfItem>(PrimaryInstance.shelfList);
@@ -1887,6 +2537,33 @@ namespace Glance
             };
         }
 
+        public static Color ColorFromHex(string hex, Color defaultColor)
+        {
+            if (string.IsNullOrWhiteSpace(hex)) return defaultColor;
+            try
+            {
+                hex = hex.Trim();
+                if (hex.StartsWith("#")) hex = hex.Substring(1);
+                if (hex.Length == 6)
+                {
+                    byte r = byte.Parse(hex.Substring(0, 2), NumberStyles.HexNumber);
+                    byte g = byte.Parse(hex.Substring(2, 2), NumberStyles.HexNumber);
+                    byte b = byte.Parse(hex.Substring(4, 2), NumberStyles.HexNumber);
+                    return Color.FromRgb(r, g, b);
+                }
+                else if (hex.Length == 8)
+                {
+                    byte a = byte.Parse(hex.Substring(0, 2), NumberStyles.HexNumber);
+                    byte r = byte.Parse(hex.Substring(2, 2), NumberStyles.HexNumber);
+                    byte g = byte.Parse(hex.Substring(4, 2), NumberStyles.HexNumber);
+                    byte b = byte.Parse(hex.Substring(6, 2), NumberStyles.HexNumber);
+                    return Color.FromArgb(a, r, g, b);
+                }
+            }
+            catch { }
+            return defaultColor;
+        }
+
         public void SetBackgroundAlpha(byte alpha)
         {
             BackgroundAlpha = alpha;
@@ -1908,7 +2585,23 @@ namespace Glance
                 {
                     backgroundAlpha = BackgroundAlpha,
                     isPinned = IsPinned,
-                    displayMode = DisplayMode
+                    displayMode = DisplayMode,
+
+                    colorAccent = ColorAccent,
+                    colorBattery = ColorBattery,
+                    colorCpu = ColorCpu,
+                    colorRam = ColorRam,
+                    colorDisk = ColorDisk,
+                    colorSound = ColorSound,
+                    colorBrightness = ColorBrightness,
+                    colorWifi = ColorWifi,
+
+                    showSlideMedia = ShowSlideMedia,
+                    showSlideSystem = ShowSlideSystem,
+                    showSlideControl = ShowSlideControl,
+                    showSlideClipboard = ShowSlideClipboard,
+                    showSlideNotes = ShowSlideNotes,
+                    showSlideShelf = ShowSlideShelf
                 };
                 File.WriteAllText(configFilePath, json.Serialize(cfg), Encoding.UTF8);
             }
@@ -2115,6 +2808,8 @@ namespace Glance
 
                     Task.Run(() => BackgroundMediaAndSystemLoop());
 
+                    ApplyCustomColors();
+                    ApplySlideVisibilityConfig();
                     ApplyDisplayMode(DisplayMode);
                 }
             }
@@ -2267,7 +2962,11 @@ namespace Glance
                     if (files != null && files.Length > 0)
                     {
                         AddFilesToShelf(files);
-                        SwitchSlide(5);
+                        int shelfPos = activeSlideIndices.IndexOf(5);
+                        if (shelfPos >= 0)
+                        {
+                            SwitchSlide(shelfPos);
+                        }
                         AnimateToExpanded();
                     }
                 }
@@ -2320,7 +3019,7 @@ namespace Glance
             collapsedIdleLayout.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
             // 1. Kiri: Battery Ring Widget
-            Grid batRing = CreateBatteryRingWidget(24, 3.3, out collapsedBatteryArc);
+            Grid batRing = CreateBatteryRingWidget(24, 3.3, out collapsedBatteryArc, out collapsedBatteryBgRing);
             batRing.HorizontalAlignment = HorizontalAlignment.Left;
             batRing.VerticalAlignment = VerticalAlignment.Center;
             Grid.SetColumn(batRing, 0);
@@ -2500,7 +3199,7 @@ namespace Glance
                 VerticalAlignment = VerticalAlignment.Center
             };
 
-            Grid smallBatRing = CreateBatteryRingWidget(18, 2.8, out expandedBatteryArc);
+            Grid smallBatRing = CreateBatteryRingWidget(18, 2.8, out expandedBatteryArc, out expandedBatteryBgRing);
             smallBatRing.Margin = new Thickness(0, 0, 7, 0);
 
             expandedDateText = new TextBlock
@@ -2593,13 +3292,13 @@ namespace Glance
             g.Children.Add(topHeader);
 
             // 2. Left "<" and Right ">" Carousel Circular Buttons
-            Border prevSlideBtn = CreateNavCircleButton(true);
+            prevSlideBtn = CreateNavCircleButton(true);
             prevSlideBtn.HorizontalAlignment = HorizontalAlignment.Left;
             prevSlideBtn.VerticalAlignment = VerticalAlignment.Center;
             prevSlideBtn.Margin = new Thickness(12, 0, 0, 0);
             prevSlideBtn.MouseLeftButtonUp += (s, e) => { e.Handled = true; SwitchSlide(currentSlide - 1); };
 
-            Border nextSlideBtn = CreateNavCircleButton(false);
+            nextSlideBtn = CreateNavCircleButton(false);
             nextSlideBtn.HorizontalAlignment = HorizontalAlignment.Right;
             nextSlideBtn.VerticalAlignment = VerticalAlignment.Center;
             nextSlideBtn.Margin = new Thickness(0, 0, 12, 0);
@@ -2608,7 +3307,7 @@ namespace Glance
             g.Children.Add(prevSlideBtn);
             g.Children.Add(nextSlideBtn);
 
-            // 3. Slides Container (5 Slides)
+            // 3. Slides Container (6 Slides)
             Grid slidesHost = new Grid
             {
                 Margin = new Thickness(42, 34, 42, 24)
@@ -2629,41 +3328,17 @@ namespace Glance
             g.Children.Add(slidesHost);
 
             // 4. Bottom Pagination Dots
-            StackPanel dotsPanel = new StackPanel
+            dotsPanel = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Bottom,
                 Margin = new Thickness(0, 0, 0, 9)
             };
-
-            string[] slideTitles =
-            {
-                "Media Player & Kalender / Lirik",
-                "Baterai, CPU, RAM & Disk (C: / D:)",
-                "Wi-Fi, Sound & Brightness",
-                "Riwayat Clipboard",
-                "Catatan Cepat",
-                "File Shelf (Tampung & Drag File)"
-            };
-            for (int i = 0; i < SlideCount; i++)
-            {
-                int idx = i;
-                Border dot = new Border
-                {
-                    Width = (i == 0) ? 18 : 5,
-                    Height = 5,
-                    CornerRadius = new CornerRadius(2.5),
-                    Background = (i == 0) ? Brushes.White : new SolidColorBrush(Color.FromArgb(140, 130, 130, 140)),
-                    Margin = new Thickness(3, 0, 3, 0),
-                    Cursor = Cursors.Hand,
-                    ToolTip = slideTitles[i]
-                };
-                dot.MouseLeftButtonUp += (s, e) => { e.Handled = true; SwitchSlide(idx); };
-                dotPills[i] = dot;
-                dotsPanel.Children.Add(dot);
-            }
             g.Children.Add(dotsPanel);
+
+            ApplySlideVisibilityConfig();
+            ApplyCustomColors();
 
             return g;
         }
@@ -3048,8 +3723,11 @@ namespace Glance
             if (lastCalendarDay == now.Day && !string.IsNullOrEmpty(calDayNameText.Text)) return;
             lastCalendarDay = now.Day;
 
+            Color accent = ColorFromHex(ColorAccent, Color.FromRgb(28, 231, 85));
+
             int dayOfWeekIdx = (int)now.DayOfWeek;
             calDayNameText.Text = IndonesianDayNames[dayOfWeekIdx];
+            calDayNameText.Foreground = new SolidColorBrush(accent);
             calDateNumText.Text = now.Day.ToString();
             calMonthYearText.Text = IndonesianMonthNames[now.Month - 1] + " " + now.Year;
 
@@ -3071,7 +3749,7 @@ namespace Glance
                         Height = 27,
                         CornerRadius = new CornerRadius(4.5),
                         Background = isToday
-                            ? new SolidColorBrush(Color.FromRgb(28, 231, 85))
+                            ? new SolidColorBrush(accent)
                             : Brushes.Transparent,
                         VerticalAlignment = VerticalAlignment.Center,
                         Margin = new Thickness(1.5, 0, 1.5, 0)
@@ -3131,13 +3809,17 @@ namespace Glance
             topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(7) });
             topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-            Border batCard = CreateTransparentStatCard("Baterai", Color.FromRgb(28, 231, 85), out sysBatVal, out sysBatBar, out sysBatSub);
+            Color colBattery = ColorFromHex(ColorBattery, Color.FromRgb(28, 231, 85));
+            Color colCpu = ColorFromHex(ColorCpu, Color.FromRgb(56, 189, 248));
+            Color colRam = ColorFromHex(ColorRam, Color.FromRgb(192, 132, 252));
+
+            Border batCard = CreateTransparentStatCard("Baterai", colBattery, out sysBatVal, out sysBatBar, out sysBatSub);
             Grid.SetColumn(batCard, 0);
 
-            Border cpuCard = CreateTransparentStatCard("CPU", Color.FromRgb(56, 189, 248), out sysCpuVal, out sysCpuBar, out sysCpuSub);
+            Border cpuCard = CreateTransparentStatCard("CPU", colCpu, out sysCpuVal, out sysCpuBar, out sysCpuSub);
             Grid.SetColumn(cpuCard, 2);
 
-            Border ramCard = CreateTransparentStatCard("RAM", Color.FromRgb(192, 132, 252), out sysRamVal, out sysRamBar, out sysRamSub);
+            Border ramCard = CreateTransparentStatCard("RAM", colRam, out sysRamVal, out sysRamBar, out sysRamSub);
             Grid.SetColumn(ramCard, 4);
 
             topRow.Children.Add(batCard);
@@ -3227,9 +3909,10 @@ namespace Glance
             driveFillBars.Clear();
             driveSubTexts.Clear();
 
+            Color diskCol = ColorFromHex(ColorDisk, Color.FromRgb(52, 211, 153));
             Color[] driveAccents =
             {
-                Color.FromRgb(251, 191, 36),
+                diskCol,
                 Color.FromRgb(45, 212, 191),
                 Color.FromRgb(244, 114, 182),
                 Color.FromRgb(96, 165, 250)
@@ -3325,9 +4008,10 @@ namespace Glance
             DockPanel.SetDock(speedStack, Dock.Right);
 
             // Small signal-strength pill shown next to the "Wi-Fi" label
+            Color colWifi = ColorFromHex(ColorWifi, Color.FromRgb(16, 185, 129));
             wifiSignalPill = new Border
             {
-                Background = new SolidColorBrush(Color.FromArgb(45, 28, 231, 85)),
+                Background = new SolidColorBrush(Color.FromArgb(45, colWifi.R, colWifi.G, colWifi.B)),
                 CornerRadius = new CornerRadius(5),
                 Padding = new Thickness(5, 0, 5, 0),
                 Margin = new Thickness(6, 0, 0, 0),
@@ -3336,7 +4020,7 @@ namespace Glance
             wifiSubText = new TextBlock
             {
                 Text = "0%",
-                Foreground = new SolidColorBrush(Color.FromRgb(28, 231, 85)),
+                Foreground = new SolidColorBrush(colWifi),
                 FontSize = 9.5,
                 FontWeight = FontWeights.Bold
             };
@@ -3394,10 +4078,11 @@ namespace Glance
             Grid.SetRow(wifiCard, 0);
 
             // Sound Slider Card
+            Color colSound = ColorFromHex(ColorSound, Color.FromRgb(56, 189, 248));
             Border soundCard = CreateSliderControlCard(
                 "🔊",
                 "Sound",
-                Color.FromRgb(56, 189, 248),
+                colSound,
                 out soundIconText,
                 out soundTrackBorder,
                 out soundFillBorder,
@@ -3414,11 +4099,12 @@ namespace Glance
             Grid.SetRow(soundCard, 2);
 
             // Brightness Slider Card
+            Color colBright = ColorFromHex(ColorBrightness, Color.FromRgb(251, 191, 36));
             TextBlock dummyBrightIcon;
             Border brightCard = CreateSliderControlCard(
                 "☀",
                 "Brightness",
-                Color.FromRgb(251, 191, 36),
+                colBright,
                 out dummyBrightIcon,
                 out brightTrackBorder,
                 out brightFillBorder,
@@ -4059,23 +4745,26 @@ namespace Glance
         // =======================================================
         // WIDGET HELPERS
         // =======================================================
-        private Grid CreateBatteryRingWidget(double size, double strokeThickness, out Path fgArc)
+        private Grid CreateBatteryRingWidget(double size, double strokeThickness, out Path fgArc, out Ellipse bgRingOut)
         {
             Grid wrap = new Grid { Width = size, Height = size };
             double radius = (size - strokeThickness) / 2.0;
             Point center = new Point(size / 2.0, size / 2.0);
 
+            Color colBattery = ColorFromHex(ColorBattery, Color.FromRgb(28, 231, 85));
+
             Ellipse bgRing = new Ellipse
             {
                 Width = size,
                 Height = size,
-                Stroke = new SolidColorBrush(Color.FromArgb(60, 28, 231, 85)),
+                Stroke = new SolidColorBrush(Color.FromArgb(60, colBattery.R, colBattery.G, colBattery.B)),
                 StrokeThickness = strokeThickness
             };
+            bgRingOut = bgRing;
 
             fgArc = new Path
             {
-                Stroke = new SolidColorBrush(Color.FromRgb(28, 231, 85)),
+                Stroke = new SolidColorBrush(colBattery),
                 StrokeThickness = strokeThickness,
                 StrokeStartLineCap = PenLineCap.Round,
                 StrokeEndLineCap = PenLineCap.Round,
@@ -4240,15 +4929,171 @@ namespace Glance
             });
         }
 
+        public void ApplySlideVisibilityConfig()
+        {
+            activeSlideIndices.Clear();
+            if (ShowSlideMedia) activeSlideIndices.Add(0);
+            if (ShowSlideSystem) activeSlideIndices.Add(1);
+            if (ShowSlideControl) activeSlideIndices.Add(2);
+            if (ShowSlideClipboard) activeSlideIndices.Add(3);
+            if (ShowSlideNotes) activeSlideIndices.Add(4);
+            if (ShowSlideShelf) activeSlideIndices.Add(5);
+
+            if (activeSlideIndices.Count == 0)
+            {
+                activeSlideIndices.Add(0);
+                ShowSlideMedia = true;
+            }
+
+            if (dotsPanel != null)
+            {
+                dotsPanel.Children.Clear();
+                activeDotPills.Clear();
+
+                Color accent = ColorFromHex(ColorAccent, Color.FromRgb(28, 231, 85));
+
+                for (int i = 0; i < activeSlideIndices.Count; i++)
+                {
+                    int activePos = i;
+                    int slideIdx = activeSlideIndices[i];
+                    Border dot = new Border
+                    {
+                        Width = (activePos == currentSlide) ? 18 : 5,
+                        Height = 5,
+                        CornerRadius = new CornerRadius(2.5),
+                        Background = (activePos == currentSlide)
+                            ? new SolidColorBrush(accent)
+                            : new SolidColorBrush(Color.FromArgb(140, 130, 130, 140)),
+                        Margin = new Thickness(3, 0, 3, 0),
+                        Cursor = Cursors.Hand,
+                        ToolTip = slideTitles[slideIdx]
+                    };
+                    dot.MouseLeftButtonUp += (s, e) => { e.Handled = true; SwitchSlide(activePos); };
+                    activeDotPills.Add(dot);
+                    dotsPanel.Children.Add(dot);
+                }
+            }
+
+            if (prevSlideBtn != null && nextSlideBtn != null)
+            {
+                bool multi = activeSlideIndices.Count > 1;
+                prevSlideBtn.Visibility = multi ? Visibility.Visible : Visibility.Collapsed;
+                nextSlideBtn.Visibility = multi ? Visibility.Visible : Visibility.Collapsed;
+            }
+
+            if (currentSlide >= activeSlideIndices.Count)
+            {
+                currentSlide = 0;
+            }
+
+            SwitchSlide(currentSlide);
+
+            if (!IsCompanionWindow && CompanionInstance != null)
+            {
+                CompanionInstance.ShowSlideMedia = ShowSlideMedia;
+                CompanionInstance.ShowSlideSystem = ShowSlideSystem;
+                CompanionInstance.ShowSlideControl = ShowSlideControl;
+                CompanionInstance.ShowSlideClipboard = ShowSlideClipboard;
+                CompanionInstance.ShowSlideNotes = ShowSlideNotes;
+                CompanionInstance.ShowSlideShelf = ShowSlideShelf;
+                CompanionInstance.ApplySlideVisibilityConfig();
+            }
+        }
+
+        public void ApplyCustomColors()
+        {
+            Color colAccent = ColorFromHex(ColorAccent, Color.FromRgb(28, 231, 85));
+            Color colBattery = ColorFromHex(ColorBattery, Color.FromRgb(28, 231, 85));
+            Color colCpu = ColorFromHex(ColorCpu, Color.FromRgb(56, 189, 248));
+            Color colRam = ColorFromHex(ColorRam, Color.FromRgb(192, 132, 252));
+            Color colDisk = ColorFromHex(ColorDisk, Color.FromRgb(52, 211, 153));
+            Color colSound = ColorFromHex(ColorSound, Color.FromRgb(56, 189, 248));
+            Color colBright = ColorFromHex(ColorBrightness, Color.FromRgb(251, 191, 36));
+            Color colWifi = ColorFromHex(ColorWifi, Color.FromRgb(16, 185, 129));
+
+            // 1. Collapsed & Header Battery Ring
+            if (collapsedBatteryArc != null) collapsedBatteryArc.Stroke = new SolidColorBrush(colBattery);
+            if (expandedBatteryArc != null) expandedBatteryArc.Stroke = new SolidColorBrush(colBattery);
+            if (collapsedBatteryBgRing != null) collapsedBatteryBgRing.Stroke = new SolidColorBrush(Color.FromArgb(60, colBattery.R, colBattery.G, colBattery.B));
+            if (expandedBatteryBgRing != null) expandedBatteryBgRing.Stroke = new SolidColorBrush(Color.FromArgb(60, colBattery.R, colBattery.G, colBattery.B));
+
+            // 2. Slide 0: Calendar day text, lyrics header, lyrics button
+            if (calDayNameText != null) calDayNameText.Foreground = new SolidColorBrush(colAccent);
+            if (lyricsHeaderText != null) lyricsHeaderText.Foreground = new SolidColorBrush(colAccent);
+            if (lyricsBtnIcon != null && showLyrics) lyricsBtnIcon.Fill = new SolidColorBrush(colAccent);
+
+            // 3. Slide 1: System Telemetry Bars & Val Texts
+            if (sysBatBar != null) sysBatBar.Background = new SolidColorBrush(colBattery);
+            if (sysBatVal != null) sysBatVal.Foreground = new SolidColorBrush(colBattery);
+
+            if (sysCpuBar != null) sysCpuBar.Background = new SolidColorBrush(colCpu);
+            if (sysCpuVal != null) sysCpuVal.Foreground = new SolidColorBrush(colCpu);
+
+            if (sysRamBar != null) sysRamBar.Background = new SolidColorBrush(colRam);
+            if (sysRamVal != null) sysRamVal.Foreground = new SolidColorBrush(colRam);
+
+            if (driveFillBars != null)
+            {
+                foreach (var df in driveFillBars) df.Background = new SolidColorBrush(colDisk);
+            }
+            if (driveValTexts != null)
+            {
+                foreach (var dv in driveValTexts) dv.Foreground = new SolidColorBrush(colDisk);
+            }
+
+            // 4. Slide 2: Sound & Brightness & Wi-Fi
+            if (soundFillBorder != null) soundFillBorder.Background = new SolidColorBrush(colSound);
+            if (soundValText != null) soundValText.Foreground = new SolidColorBrush(colSound);
+
+            if (brightFillBorder != null) brightFillBorder.Background = new SolidColorBrush(colBright);
+            if (brightValText != null) brightValText.Foreground = new SolidColorBrush(colBright);
+
+            if (wifiSubText != null && wifiSignalPill != null)
+            {
+                wifiSubText.Foreground = new SolidColorBrush(colWifi);
+                wifiSignalPill.Background = new SolidColorBrush(Color.FromArgb(45, colWifi.R, colWifi.G, colWifi.B));
+            }
+
+            // 5. Update dots active color
+            SwitchSlide(currentSlide);
+
+            // 6. Sync with Companion Window if active
+            if (!IsCompanionWindow && CompanionInstance != null)
+            {
+                CompanionInstance.ColorAccent = ColorAccent;
+                CompanionInstance.ColorBattery = ColorBattery;
+                CompanionInstance.ColorCpu = ColorCpu;
+                CompanionInstance.ColorRam = ColorRam;
+                CompanionInstance.ColorDisk = ColorDisk;
+                CompanionInstance.ColorSound = ColorSound;
+                CompanionInstance.ColorBrightness = ColorBrightness;
+                CompanionInstance.ColorWifi = ColorWifi;
+                CompanionInstance.ApplyCustomColors();
+            }
+        }
+
         private void SwitchSlide(int index)
         {
-            currentSlide = (index + SlideCount) % SlideCount;
+            if (activeSlideIndices == null || activeSlideIndices.Count == 0) return;
+            currentSlide = (index + activeSlideIndices.Count) % activeSlideIndices.Count;
+            int targetSlide = activeSlideIndices[currentSlide];
+
             for (int i = 0; i < SlideCount; i++)
             {
-                slidePanels[i].Visibility = (i == currentSlide) ? Visibility.Visible : Visibility.Collapsed;
-                dotPills[i].Width = (i == currentSlide) ? 18 : 5;
-                dotPills[i].Background = (i == currentSlide)
-                    ? Brushes.White
+                if (slidePanels[i] != null)
+                {
+                    slidePanels[i].Visibility = (i == targetSlide) ? Visibility.Visible : Visibility.Collapsed;
+                }
+            }
+
+            Color accent = ColorFromHex(ColorAccent, Color.FromRgb(28, 231, 85));
+
+            for (int i = 0; i < activeDotPills.Count; i++)
+            {
+                bool active = (i == currentSlide);
+                activeDotPills[i].Width = active ? 18 : 5;
+                activeDotPills[i].Background = active
+                    ? new SolidColorBrush(accent)
                     : new SolidColorBrush(Color.FromArgb(140, 130, 130, 140));
             }
         }
@@ -4319,7 +5164,8 @@ namespace Glance
                         TextBlock tb = lyricsStack.Children[i] as TextBlock;
                         if (tb == null) continue;
                         bool active = (i == activeLyricIndex);
-                        tb.Foreground = active ? new SolidColorBrush(Color.FromRgb(28, 231, 85)) : new SolidColorBrush(Color.FromRgb(140, 140, 150));
+                        Color colAccent = ColorFromHex(ColorAccent, Color.FromRgb(28, 231, 85));
+                        tb.Foreground = active ? new SolidColorBrush(colAccent) : new SolidColorBrush(Color.FromRgb(140, 140, 150));
                         tb.FontWeight = active ? FontWeights.Bold : FontWeights.Normal;
                         tb.FontSize = active ? 11.5 : 10;
                         if (active) tb.BringIntoView();
@@ -4417,7 +5263,7 @@ namespace Glance
             collapsedArtBox.Background = new SolidColorBrush(Color.FromArgb(55, 255, 255, 255));
             collapsedArtPlaceholder.Visibility = Visibility.Visible;
 
-            AnimateWaveColor(Color.FromRgb(28, 231, 85));
+            AnimateWaveColor(ColorFromHex(ColorAccent, Color.FromRgb(28, 231, 85)));
         }
 
         private void AnimateWaveColor(Color target)
@@ -4503,11 +5349,12 @@ namespace Glance
         private void ToggleLyricsView()
         {
             showLyrics = !showLyrics;
+            Color colAccent = ColorFromHex(ColorAccent, Color.FromRgb(28, 231, 85));
             lyricsBtnBorder.Background = showLyrics
-                ? new SolidColorBrush(Color.FromArgb(45, 28, 231, 85))
+                ? new SolidColorBrush(Color.FromArgb(45, colAccent.R, colAccent.G, colAccent.B))
                 : Brushes.Transparent;
             lyricsBtnIcon.Fill = showLyrics
-                ? new SolidColorBrush(Color.FromRgb(28, 231, 85))
+                ? new SolidColorBrush(colAccent)
                 : Brushes.White;
 
             if (calendarPanel != null) calendarPanel.Visibility = showLyrics ? Visibility.Collapsed : Visibility.Visible;
@@ -5082,6 +5929,22 @@ namespace Glance
                         {
                             DisplayMode = cfg.displayMode;
                         }
+
+                        if (!string.IsNullOrEmpty(cfg.colorAccent)) ColorAccent = cfg.colorAccent;
+                        if (!string.IsNullOrEmpty(cfg.colorBattery)) ColorBattery = cfg.colorBattery;
+                        if (!string.IsNullOrEmpty(cfg.colorCpu)) ColorCpu = cfg.colorCpu;
+                        if (!string.IsNullOrEmpty(cfg.colorRam)) ColorRam = cfg.colorRam;
+                        if (!string.IsNullOrEmpty(cfg.colorDisk)) ColorDisk = cfg.colorDisk;
+                        if (!string.IsNullOrEmpty(cfg.colorSound)) ColorSound = cfg.colorSound;
+                        if (!string.IsNullOrEmpty(cfg.colorBrightness)) ColorBrightness = cfg.colorBrightness;
+                        if (!string.IsNullOrEmpty(cfg.colorWifi)) ColorWifi = cfg.colorWifi;
+
+                        ShowSlideMedia = cfg.showSlideMedia;
+                        ShowSlideSystem = cfg.showSlideSystem;
+                        ShowSlideControl = cfg.showSlideControl;
+                        ShowSlideClipboard = cfg.showSlideClipboard;
+                        ShowSlideNotes = cfg.showSlideNotes;
+                        ShowSlideShelf = cfg.showSlideShelf;
                     }
                 }
             }

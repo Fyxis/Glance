@@ -73,6 +73,29 @@ Unlike heavy modern utilities wrapped in Electron or Chromium that devour hundre
 * **Quick File Actions**: Buka lokasi file di Windows Explorer (`📂`), salin path file, hapus per item (`✕`), dan tombol "Bersihkan Semua".
 * **Multi-Monitor Sync**: File di Shelf tersinkronisasi otomatis di monitor 1 dan monitor 2.
 
+### 🎨 10. Kustomisasi Penuh: Warna per Area & Manajemen Slide
+* **Dialog Pengaturan Multi-Tab Modern (`⚙️`)**:
+  - `⚙️ Umum`: Startup otomatis Windows, Pin notch agar tetap terbuka, pemilihan monitor (Layar 1 / Layar 2 / Kedua Layar), slider opasitas frosted glass, dan panduan shortcut Glance Search.
+  - `🎨 Kustom Warna`: Personalisasi warna independen untuk setiap elemen/area tanpa mempengaruhi area lain:
+    - **Tema Utama (Main Accent)**: Tombol aksi, glow, dan titik pagination.
+    - **Baterai**: Cincin circular arc pada notch dan bar status baterai di system card.
+    - **Processor (CPU)**: Bar telemetri beban kerja CPU.
+    - **Memory (RAM)**: Bar kapasitas pemakaian RAM.
+    - **Penyimpanan (Disk)**: Bar kapasitas partisi drive (Drive C, D, dst).
+    - **Volume Suara**: Slider dan pill master audio.
+    - **Kecerahan Layar**: Slider hardware brightness.
+    - **Wi-Fi & Speed**: Pill status koneksi dan indikator kecepatan internet.
+    - Dilengkapi **8 preset swatch instan** + **input kode HEX custom** + **live preview swatch** + **tombol reset per area**.
+  - `📑 Kelola Slide`: Centang slide mana saja yang ingin diaktifkan atau dinonaktifkan:
+    - 🎵 *Media Player & Kalender*
+    - 📊 *Sistem & Disk Telemetri*
+    - 🎛️ *Pusat Kontrol (Volume, Brightness, Wi-Fi)*
+    - 📋 *Riwayat Clipboard*
+    - 📝 *Catatan Cepat (Quick Notes)*
+    - 📥 *Drop Shelf (File Staging)*
+    - *Jika slide dimatikan (misal Catatan Cepat), slide tersebut otomatis dieliminasi dari rotasi carousel, titik navigasi (dots) dibuat ulang secara dinamis sesuai jumlah slide aktif, dan tombol `<` / `>` langsung melompati slide yang dinonaktifkan.*
+* **Penerapan Langsung (Live Instant Sync)**: Perubahan warna dan susunan slide langsung aktif seketika pada kedua monitor saat tombol "Simpan Pengaturan" ditekan tanpa perlu me-restart aplikasi.
+
 ---
 
 ## ⚡ Performance & Memory Footprint
