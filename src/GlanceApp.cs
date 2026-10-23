@@ -1133,7 +1133,8 @@ namespace Glance
             blurredScreenImage.Source = null;
             resultsStack.Children.Clear();
             currentMatches.Clear();
-            MemoryOptimizer.TrimMemory();
+            cachedApps = null;
+            MemoryOptimizer.TrimMemory(force: true);
         }
 
         private void OnSearchInputChanged(object sender, TextChangedEventArgs e)
@@ -2516,7 +2517,6 @@ namespace Glance
             if (!IsCompanionWindow)
             {
                 LoadSavedData();
-                SpotlightWindow.PrewarmIndexAsync();
             }
             else if (PrimaryInstance != null)
             {
@@ -2871,9 +2871,10 @@ namespace Glance
                     var maintenanceTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10.0) };
                     maintenanceTimer.Tick += (s, ev) =>
                     {
-                        if (!isExpanded && (spotlightWin == null || !spotlightWin.IsVisible))
+                        bool anyExpanded = isExpanded || (CompanionInstance != null && CompanionInstance.isExpanded);
+                        if (!anyExpanded && (spotlightWin == null || !spotlightWin.IsVisible))
                         {
-                            MemoryOptimizer.TrimMemory();
+                            MemoryOptimizer.TrimMemory(force: true);
                         }
                     };
                     maintenanceTimer.Start();
