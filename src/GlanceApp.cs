@@ -2283,7 +2283,7 @@ namespace Glance
 
         public bool IsPinned { get; private set; }
         public byte BackgroundAlpha { get; private set; }
-        private bool isExpanded = false;
+        private volatile bool isExpanded = false;
         private bool isInputFocused = false;
         private int currentSlide = 0;
 
@@ -3910,7 +3910,35 @@ namespace Glance
 
             g.Children.Add(topRow);
             g.Children.Add(drivesContainerGrid);
+
+            RebuildDrivesGrid(GetFreshDrives());
             return g;
+        }
+
+        private static List<DriveStatInfo> GetFreshDrives()
+        {
+            var list = new List<DriveStatInfo>();
+            try
+            {
+                foreach (var drv in DriveInfo.GetDrives())
+                {
+                    if (drv.IsReady && (drv.DriveType == DriveType.Fixed || drv.DriveType == DriveType.Removable))
+                    {
+                        double tot = drv.TotalSize / (1024.0 * 1024 * 1024);
+                        double used = (drv.TotalSize - drv.AvailableFreeSpace) / (1024.0 * 1024 * 1024);
+                        int pct = tot > 0 ? (int)Math.Round((used / tot) * 100.0) : 0;
+                        list.Add(new DriveStatInfo
+                        {
+                            Name = drv.Name,
+                            Percent = pct,
+                            UsedGB = used,
+                            TotalGB = tot
+                        });
+                    }
+                }
+            }
+            catch { }
+            return list;
         }
 
         private Border CreateTransparentStatCard(string label, Color accent, out TextBlock valText, out Border fillBar, out TextBlock subText)
@@ -3981,6 +4009,7 @@ namespace Glance
 
         private void RebuildDrivesGrid(List<DriveStatInfo> drives)
         {
+            if (drivesContainerGrid == null) return;
             drivesContainerGrid.Children.Clear();
             drivesContainerGrid.ColumnDefinitions.Clear();
             driveValTexts.Clear();
@@ -3996,7 +4025,9 @@ namespace Glance
                 Color.FromRgb(96, 165, 250)
             };
 
-            int count = Math.Max(1, drives.Count);
+            int count = (drives != null && drives.Count > 0) ? drives.Count : 1;
+            double maxDriveBarWidth = (drives != null && drives.Count > 0) ? Math.Max(60.0, (290.0 / drives.Count) - 24.0) : 130.0;
+
             for (int i = 0; i < count; i++)
             {
                 if (i > 0)
@@ -4005,7 +4036,7 @@ namespace Glance
                 }
                 drivesContainerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-                string drvLabel = i < drives.Count ? ("Disk (" + drives[i].Name.TrimEnd('\\') + ")") : "Disk";
+                string drvLabel = (drives != null && i < drives.Count) ? ("Disk (" + drives[i].Name.TrimEnd('\\') + ")") : "Disk";
                 Color accent = driveAccents[i % driveAccents.Length];
 
                 TextBlock valTxt, subTxt;
@@ -4013,6 +4044,13 @@ namespace Glance
                 Border card = CreateTransparentStatCard(drvLabel, accent, out valTxt, out fillBar, out subTxt);
                 Grid.SetColumn(card, i * 2);
                 drivesContainerGrid.Children.Add(card);
+
+                if (drives != null && i < drives.Count)
+                {
+                    valTxt.Text = drives[i].Percent + "%";
+                    subTxt.Text = string.Format(CultureInfo.InvariantCulture, "{0:F0} / {1:F0} GB", drives[i].UsedGB, drives[i].TotalGB);
+                    fillBar.Width = Math.Max(4, maxDriveBarWidth * drives[i].Percent / 100.0);
+                }
 
                 driveValTexts.Add(valTxt);
                 driveFillBars.Add(fillBar);
@@ -5632,7 +5670,7 @@ namespace Glance
             bool cachedWifiConn = false;
             string cachedWifiSsid = "Checking...";
             int cachedWifiSig = 0;
-            List<DriveStatInfo> cachedDrivesList = new List<DriveStatInfo>();
+            List<DriveStatInfo> cachedDrivesList = GetFreshDrives();
             NativeMethods.MEMORYSTATUSEX mem = new NativeMethods.MEMORYSTATUSEX();
 
             while (true)
@@ -5736,30 +5774,9 @@ namespace Glance
 
                     if (isExpanded)
                     {
-                        if (loopCounter % 8 == 0 || cachedDrivesList.Count == 0)
+                        if (loopCounter % 15 == 0 || cachedDrivesList == null || cachedDrivesList.Count == 0)
                         {
-                            List<DriveStatInfo> freshDrives = new List<DriveStatInfo>();
-                            try
-                            {
-                                foreach (var drv in DriveInfo.GetDrives())
-                                {
-                                    if (drv.IsReady && (drv.DriveType == DriveType.Fixed || drv.DriveType == DriveType.Removable))
-                                    {
-                                        double tot = drv.TotalSize / (1024.0 * 1024 * 1024);
-                                        double used = (drv.TotalSize - drv.AvailableFreeSpace) / (1024.0 * 1024 * 1024);
-                                        int pct = tot > 0 ? (int)Math.Round((used / tot) * 100.0) : 0;
-                                        freshDrives.Add(new DriveStatInfo
-                                        {
-                                            Name = drv.Name,
-                                            Percent = pct,
-                                            UsedGB = used,
-                                            TotalGB = tot
-                                        });
-                                    }
-                                }
-                                cachedDrivesList = freshDrives;
-                            }
-                            catch { }
+                            cachedDrivesList = GetFreshDrives();
                         }
 
                         if (loopCounter % 4 == 0)
@@ -5941,20 +5958,32 @@ namespace Glance
                 sysRamBar.Width = Math.Max(4, 85.0 * ramPct / 100.0);
 
                 // Slide 1: Bottom Row (Multi-Drive Storage)
-                string sig = string.Join(",", drives.Select(d => d.Name));
-                if (sig != lastDrivesSignature)
+                if (drives != null && drives.Count > 0)
                 {
-                    lastDrivesSignature = sig;
-                    RebuildDrivesGrid(drives);
-                }
+                    string sig = string.Join(",", drives.Select(d => d.Name));
+                    if (sig != lastDrivesSignature || driveValTexts.Count == 0)
+                    {
+                        lastDrivesSignature = sig;
+                        RebuildDrivesGrid(drives);
+                    }
 
-                double maxDriveBarWidth = drives.Count > 0 ? Math.Max(60.0, (290.0 / drives.Count) - 24.0) : 130.0;
-                for (int i = 0; i < drives.Count && i < driveValTexts.Count; i++)
+                    double maxDriveBarWidth = Math.Max(60.0, (290.0 / drives.Count) - 24.0);
+                    for (int i = 0; i < drives.Count && i < driveValTexts.Count; i++)
+                    {
+                        var d = drives[i];
+                        driveValTexts[i].Text = d.Percent + "%";
+                        driveSubTexts[i].Text = string.Format(CultureInfo.InvariantCulture, "{0:F0} / {1:F0} GB", d.UsedGB, d.TotalGB);
+                        driveFillBars[i].Width = Math.Max(4, maxDriveBarWidth * d.Percent / 100.0);
+                    }
+                }
+                else if (driveValTexts.Count == 0)
                 {
-                    var d = drives[i];
-                    driveValTexts[i].Text = d.Percent + "%";
-                    driveSubTexts[i].Text = string.Format(CultureInfo.InvariantCulture, "{0:F0} / {1:F0} GB", d.UsedGB, d.TotalGB);
-                    driveFillBars[i].Width = Math.Max(4, maxDriveBarWidth * d.Percent / 100.0);
+                    var fresh = GetFreshDrives();
+                    if (fresh.Count > 0)
+                    {
+                        lastDrivesSignature = string.Join(",", fresh.Select(d => d.Name));
+                        RebuildDrivesGrid(fresh);
+                    }
                 }
 
                 // Slide 2: Control Center
