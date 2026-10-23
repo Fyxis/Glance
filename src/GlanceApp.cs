@@ -1415,6 +1415,7 @@ namespace Glance
         private CheckBox chkSlideShelf;
 
         // Tab Navigation
+        private int currentSelectedTab = 0;
         private Border tabBtnGeneral;
         private Border tabBtnColors;
         private Border tabBtnSlides;
@@ -1456,16 +1457,22 @@ namespace Glance
                 Effect = new DropShadowEffect { BlurRadius = 28, ShadowDepth = 6, Opacity = 0.65, Color = Colors.Black }
             };
 
-            outer.MouseLeftButtonDown += (s, e) => { if (e.ButtonState == MouseButtonState.Pressed) DragMove(); };
-
             Grid root = new Grid();
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(44) }); // Header
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(40) }); // Tab bar
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // Content
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(48) }); // Save button
 
-            // 1. Header
-            DockPanel header = new DockPanel { VerticalAlignment = VerticalAlignment.Center };
+            // 1. Header (Title bar is draggable)
+            DockPanel header = new DockPanel { VerticalAlignment = VerticalAlignment.Center, Background = Brushes.Transparent };
+            header.MouseLeftButtonDown += (s, e) =>
+            {
+                if (e.ButtonState == MouseButtonState.Pressed && e.OriginalSource != null)
+                {
+                    try { DragMove(); } catch { }
+                }
+            };
+
             Button closeBtn = new Button
             {
                 Content = "✕",
@@ -1481,7 +1488,7 @@ namespace Glance
             closeBtn.Click += (s, e) => Close();
             header.Children.Add(closeBtn);
 
-            StackPanel titleStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            StackPanel titleStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center, IsHitTestVisible = false };
             titleStack.Children.Add(new TextBlock
             {
                 Text = "Pengaturan Glance",
@@ -1508,13 +1515,13 @@ namespace Glance
             tabBar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(6) });
             tabBar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-            tabBtnGeneral = CreateTabButton("⚙️ Umum", () => SelectTab(0));
+            tabBtnGeneral = CreateTabButton("⚙️ Umum", () => SelectTab(0), 0);
             Grid.SetColumn(tabBtnGeneral, 0);
 
-            tabBtnColors = CreateTabButton("🎨 Kustom Warna", () => SelectTab(1));
+            tabBtnColors = CreateTabButton("🎨 Kustom Warna", () => SelectTab(1), 1);
             Grid.SetColumn(tabBtnColors, 2);
 
-            tabBtnSlides = CreateTabButton("📑 Kelola Slide", () => SelectTab(2));
+            tabBtnSlides = CreateTabButton("📑 Kelola Slide", () => SelectTab(2), 2);
             Grid.SetColumn(tabBtnSlides, 4);
 
             tabBar.Children.Add(tabBtnGeneral);
@@ -1559,28 +1566,59 @@ namespace Glance
             Content = outer;
         }
 
-        private Border CreateTabButton(string text, Action onClick)
+        private Border CreateTabButton(string text, Action onClick, int tabIndex)
         {
             Border btn = new Border
             {
                 Height = 32,
                 CornerRadius = new CornerRadius(8),
-                Cursor = Cursors.Hand
+                Cursor = Cursors.Hand,
+                Background = new SolidColorBrush(Color.FromArgb(28, 255, 255, 255))
             };
             TextBlock tb = new TextBlock
             {
                 Text = text,
                 FontSize = 12,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
+                VerticalAlignment = VerticalAlignment.Center,
+                IsHitTestVisible = false
             };
             btn.Child = tb;
-            btn.MouseLeftButtonUp += (s, e) => { e.Handled = true; onClick(); };
+
+            btn.PreviewMouseLeftButtonDown += (s, e) =>
+            {
+                e.Handled = true;
+                onClick();
+            };
+
+            btn.MouseLeftButtonUp += (s, e) =>
+            {
+                e.Handled = true;
+                onClick();
+            };
+
+            btn.MouseEnter += (s, e) =>
+            {
+                if (currentSelectedTab != tabIndex)
+                {
+                    btn.Background = new SolidColorBrush(Color.FromArgb(50, 255, 255, 255));
+                }
+            };
+
+            btn.MouseLeave += (s, e) =>
+            {
+                if (currentSelectedTab != tabIndex)
+                {
+                    btn.Background = new SolidColorBrush(Color.FromArgb(28, 255, 255, 255));
+                }
+            };
+
             return btn;
         }
 
         private void SelectTab(int index)
         {
+            currentSelectedTab = index;
             scrollGeneral.Visibility = (index == 0) ? Visibility.Visible : Visibility.Collapsed;
             scrollColors.Visibility = (index == 1) ? Visibility.Visible : Visibility.Collapsed;
             scrollSlides.Visibility = (index == 2) ? Visibility.Visible : Visibility.Collapsed;
@@ -1970,13 +2008,19 @@ namespace Glance
                     Cursor = Cursors.Hand,
                     ToolTip = h
                 };
-                pill.MouseLeftButtonUp += (s, e) =>
+                pill.PreviewMouseLeftButtonDown += (s, e) =>
                 {
                     e.Handled = true;
                     swatch.Background = new SolidColorBrush(MainWindow.ColorFromHex(h, Colors.White));
                     if (hexBox != null) hexBox.Text = h;
                     onColorPicked(h);
                 };
+                pill.MouseLeftButtonUp += (s, e) =>
+                {
+                    e.Handled = true;
+                };
+                pill.MouseEnter += (s, e) => { pill.BorderBrush = Brushes.White; };
+                pill.MouseLeave += (s, e) => { pill.BorderBrush = new SolidColorBrush(Color.FromArgb(70, 255, 255, 255)); };
                 swatchesPanel.Children.Add(pill);
             }
 
@@ -2096,6 +2140,7 @@ namespace Glance
         private Border CreateSlideCheckCard(string title, string desc, bool isChecked, out CheckBox chkOut)
         {
             Border card = CreateOptionCard();
+            card.Cursor = Cursors.Hand;
             StackPanel sp = new StackPanel();
 
             CheckBox chk = new CheckBox
@@ -2116,7 +2161,13 @@ namespace Glance
                 Foreground = new SolidColorBrush(Color.FromRgb(160, 160, 175)),
                 FontSize = 10.5,
                 Margin = new Thickness(24, 2, 0, 0),
-                TextWrapping = TextWrapping.Wrap
+                TextWrapping = TextWrapping.Wrap,
+                Cursor = Cursors.Hand
+            };
+            tbDesc.PreviewMouseLeftButtonDown += (s, e) =>
+            {
+                e.Handled = true;
+                chk.IsChecked = !chk.IsChecked;
             };
 
             sp.Children.Add(chk);
