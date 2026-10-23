@@ -192,7 +192,7 @@ namespace Glance
 
         private static void RefreshInterfacesIfNeeded()
         {
-            if (cachedInterfaces != null && (DateTime.UtcNow - lastInterfaceRefresh).TotalSeconds < 10.0)
+            if (cachedInterfaces != null && (DateTime.UtcNow - lastInterfaceRefresh).TotalSeconds < 60.0)
             {
                 return;
             }
@@ -506,7 +506,7 @@ namespace Glance
         public static void GetWifiStatus(out bool connected, out string ssid, out int signalPercent)
         {
             connected = false;
-            ssid = "Tidak Terhubung";
+            ssid = "Not Connected";
             signalPercent = 0;
 
             try
@@ -606,6 +606,19 @@ namespace Glance
 
         [DllImport("kernel32.dll", SetLastError = true)]
         public static extern bool GetSystemTimes(out long lpIdleTime, out long lpKernelTime, out long lpUserTime);
+
+        [DllImport("kernel32.dll")]
+        public static extern IntPtr GetCurrentProcess();
+
+        public const int WM_CLIPBOARDUPDATE = 0x031D;
+
+        [DllImport("user32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool AddClipboardFormatListener(IntPtr hwnd);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool RemoveClipboardFormatListener(IntPtr hwnd);
     }
 
     public static class MemoryOptimizer
@@ -626,11 +639,11 @@ namespace Glance
                     lastTrim = DateTime.UtcNow;
                 }
 
-                GC.Collect(2, GCCollectionMode.Forced, false);
+                GC.Collect(2, GCCollectionMode.Forced, true);
                 GC.WaitForPendingFinalizers();
-                GC.Collect(2, GCCollectionMode.Forced, false);
+                GC.Collect(2, GCCollectionMode.Forced, true);
 
-                IntPtr handle = Process.GetCurrentProcess().Handle;
+                IntPtr handle = NativeMethods.GetCurrentProcess();
                 NativeMethods.SetProcessWorkingSetSize(handle, new IntPtr(-1), new IntPtr(-1));
                 NativeMethods.EmptyWorkingSet(handle);
             }
@@ -755,8 +768,8 @@ namespace Glance
                             {
                                 string folderName = System.IO.Path.GetFileName(System.IO.Path.GetDirectoryName(file));
                                 string subtitle = (folderName.Equals("Programs", StringComparison.OrdinalIgnoreCase) || folderName.Equals("Desktop", StringComparison.OrdinalIgnoreCase))
-                                    ? "Aplikasi Terpasang"
-                                    : ("Aplikasi • " + folderName);
+                                    ? "Installed App"
+                                    : ("App • " + folderName);
 
                                 map[name] = new AppSearchEntry
                                 {
@@ -810,7 +823,7 @@ namespace Glance
                                                 LowerName = lower,
                                                 Words = Regex.Split(lower, @"[\s\-_\.]+").Where(w => w.Length > 0).ToArray(),
                                                 LaunchPath = exePath,
-                                                Subtitle = "Aplikasi Sistem",
+                                                Subtitle = "System App",
                                                 IconSource = null
                                             };
                                         }
@@ -860,7 +873,7 @@ namespace Glance
             AllowsTransparency = true;
             Background = Brushes.Transparent;
             Topmost = true;
-            Closed += (s, e) => MemoryOptimizer.TrimMemory();
+            Closed += (s, e) => MemoryOptimizer.TrimMemory(force: true);
             ShowInTaskbar = false;
             ResizeMode = ResizeMode.NoResize;
 
@@ -1436,7 +1449,7 @@ namespace Glance
             AllowsTransparency = true;
             Background = Brushes.Transparent;
             Topmost = true;
-            Closed += (s, e) => MemoryOptimizer.TrimMemory();
+            Closed += (s, e) => MemoryOptimizer.TrimMemory(force: true);
 
             tempColorAccent = parentIsland != null ? (parentIsland.ColorAccent ?? "#1CE755") : "#1CE755";
             tempColorBattery = parentIsland != null ? (parentIsland.ColorBattery ?? "#1CE755") : "#1CE755";
@@ -2423,8 +2436,10 @@ namespace Glance
         // Timers & State
         private DispatcherTimer clockTimer;
         private DispatcherTimer collapseDelayTimer;
-        private DispatcherTimer clipboardTimer;
         private Forms.NotifyIcon trayIcon;
+        private int lastBatPct = -1;
+        private string lastFastTimeStr = "";
+        private string lastFastDateStr = "";
 
         // Media & Lyrics State
         private string currentTitle = "";
@@ -2536,7 +2551,7 @@ namespace Glance
             AllowsTransparency = true;
             Background = Brushes.Transparent;
             Topmost = true;
-            Closed += (s, e) => MemoryOptimizer.TrimMemory();
+            Closed += (s, e) => MemoryOptimizer.TrimMemory(force: true);
             ShowInTaskbar = false;
             ResizeMode = ResizeMode.NoResize;
 
@@ -2570,6 +2585,7 @@ namespace Glance
                     {
                         IntPtr hwnd = new WindowInteropHelper(this).Handle;
                         NativeMethods.UnregisterHotKey(hwnd, HOTKEY_ID_SPOTLIGHT);
+                        NativeMethods.RemoveClipboardFormatListener(hwnd);
                     }
                     catch { }
 
@@ -2827,27 +2843,32 @@ namespace Glance
                         NativeMethods.MOD_CONTROL | NativeMethods.MOD_SHIFT | NativeMethods.MOD_NOREPEAT,
                         NativeMethods.VK_P
                     );
+                    NativeMethods.AddClipboardFormatListener(hwnd);
 
-                    clockTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+                    clockTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1000) };
                     clockTimer.Tick += OnFastTick;
                     clockTimer.Start();
                     OnFastTick(null, null);
 
-                    clipboardTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(900) };
-                    clipboardTimer.Tick += OnClipboardTick;
-                    clipboardTimer.Start();
-
-                    // Startup one-shot memory trimmer (flushes initial WPF / DirectX / font cache setup bloat)
-                    var startupTrimTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2.0) };
-                    startupTrimTimer.Tick += (s, ev) =>
+                    // Startup memory trimmers (flushes initial WPF / DirectX / font cache setup bloat)
+                    var startupTrimTimer1 = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1500) };
+                    startupTrimTimer1.Tick += (s, ev) =>
                     {
-                        startupTrimTimer.Stop();
+                        startupTrimTimer1.Stop();
                         MemoryOptimizer.TrimMemory(force: true);
                     };
-                    startupTrimTimer.Start();
+                    startupTrimTimer1.Start();
 
-                    // Periodic background memory trimmer (every 30 seconds when collapsed/idle)
-                    var maintenanceTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30.0) };
+                    var startupTrimTimer2 = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(4000) };
+                    startupTrimTimer2.Tick += (s, ev) =>
+                    {
+                        startupTrimTimer2.Stop();
+                        MemoryOptimizer.TrimMemory(force: true);
+                    };
+                    startupTrimTimer2.Start();
+
+                    // Periodic background memory trimmer (every 10 seconds when collapsed/idle)
+                    var maintenanceTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10.0) };
                     maintenanceTimer.Tick += (s, ev) =>
                     {
                         if (!isExpanded && (spotlightWin == null || !spotlightWin.IsVisible))
@@ -2876,6 +2897,11 @@ namespace Glance
             {
                 handled = true;
                 ToggleSpotlightSearch();
+            }
+            else if (msg == NativeMethods.WM_CLIPBOARDUPDATE)
+            {
+                handled = true;
+                OnClipboardTick(null, null);
             }
             return IntPtr.Zero;
         }
@@ -4936,6 +4962,9 @@ namespace Glance
             if (isExpanded) return;
             isExpanded = true;
 
+            if (clockTimer != null) clockTimer.Interval = TimeSpan.FromMilliseconds(250);
+            UpdateMediaTimelineUI();
+
             notchBody.CornerRadius = new CornerRadius(0, 0, 32, 32);
 
             CubicEase ease = new CubicEase { EasingMode = EasingMode.EaseOut };
@@ -4959,13 +4988,15 @@ namespace Glance
             if (!isExpanded) return;
             isExpanded = false;
 
+            if (clockTimer != null) clockTimer.Interval = TimeSpan.FromMilliseconds(1000);
+
             notchBody.CornerRadius = new CornerRadius(0, 0, 19, 19);
 
             CubicEase ease = new CubicEase { EasingMode = EasingMode.EaseOut };
             Duration dur = new Duration(TimeSpan.FromMilliseconds(280));
 
             var widthAnim = new DoubleAnimation(CurrentCollapsedWidth, dur) { EasingFunction = ease };
-            widthAnim.Completed += (s, e) => MemoryOptimizer.TrimMemory();
+            widthAnim.Completed += (s, e) => MemoryOptimizer.TrimMemory(force: true);
 
             notchBody.BeginAnimation(WidthProperty, widthAnim);
             notchBody.BeginAnimation(HeightProperty, new DoubleAnimation(CollapsedHeight, dur) { EasingFunction = ease });
@@ -5156,15 +5187,26 @@ namespace Glance
         {
             DateTime now = DateTime.Now;
             string timeStr = now.ToString("HH:mm", CultureInfo.InvariantCulture);
+            if (timeStr != lastFastTimeStr)
+            {
+                lastFastTimeStr = timeStr;
+                collapsedTimeText.Text = timeStr;
+                expandedTimeText.Text = timeStr;
+                if (collapsedMusicTimeText != null) collapsedMusicTimeText.Text = timeStr;
+            }
+
             string dateStr = now.ToString("ddd dd MMM yyyy", CultureInfo.InvariantCulture);
+            if (dateStr != lastFastDateStr)
+            {
+                lastFastDateStr = dateStr;
+                expandedDateText.Text = dateStr;
+                UpdateCalendarUI(now);
+            }
 
-            collapsedTimeText.Text = timeStr;
-            expandedTimeText.Text = timeStr;
-            if (collapsedMusicTimeText != null) collapsedMusicTimeText.Text = timeStr;
-            expandedDateText.Text = dateStr;
-
-            UpdateCalendarUI(now);
-            UpdateMediaTimelineUI();
+            if (isExpanded)
+            {
+                UpdateMediaTimelineUI();
+            }
 
             if (!IsCompanionWindow && CompanionInstance != null && CompanionInstance.IsVisible)
             {
@@ -5174,6 +5216,8 @@ namespace Glance
 
         private void UpdateMediaTimelineUI()
         {
+            if (!isExpanded) return;
+
             if (string.IsNullOrEmpty(currentTitle) || currentDur <= 0)
             {
                 timeCurrentText.Text = "00:00";
@@ -5585,9 +5629,10 @@ namespace Glance
             int loopCounter = 0;
             int cachedBrightness = 100;
             bool cachedWifiConn = false;
-            string cachedWifiSsid = "Memeriksa...";
+            string cachedWifiSsid = "Checking...";
             int cachedWifiSig = 0;
             List<DriveStatInfo> cachedDrivesList = new List<DriveStatInfo>();
+            NativeMethods.MEMORYSTATUSEX mem = new NativeMethods.MEMORYSTATUSEX();
 
             while (true)
             {
@@ -5683,51 +5728,53 @@ namespace Glance
 
                     int cpuPct = SampleCpuPercent();
 
-                    var mem = new NativeMethods.MEMORYSTATUSEX();
                     NativeMethods.GlobalMemoryStatusEx(mem);
                     int ramPct = (int)mem.dwMemoryLoad;
                     double totalRamGB = mem.ullTotalPhys / (1024.0 * 1024 * 1024);
                     double usedRamGB = (mem.ullTotalPhys - mem.ullAvailPhys) / (1024.0 * 1024 * 1024);
 
-                    if (loopCounter % 8 == 0 || cachedDrivesList.Count == 0)
+                    if (isExpanded)
                     {
-                        List<DriveStatInfo> freshDrives = new List<DriveStatInfo>();
-                        try
+                        if (loopCounter % 8 == 0 || cachedDrivesList.Count == 0)
                         {
-                            foreach (var drv in DriveInfo.GetDrives())
+                            List<DriveStatInfo> freshDrives = new List<DriveStatInfo>();
+                            try
                             {
-                                if (drv.IsReady && (drv.DriveType == DriveType.Fixed || drv.DriveType == DriveType.Removable))
+                                foreach (var drv in DriveInfo.GetDrives())
                                 {
-                                    double tot = drv.TotalSize / (1024.0 * 1024 * 1024);
-                                    double used = (drv.TotalSize - drv.AvailableFreeSpace) / (1024.0 * 1024 * 1024);
-                                    int pct = tot > 0 ? (int)Math.Round((used / tot) * 100.0) : 0;
-                                    freshDrives.Add(new DriveStatInfo
+                                    if (drv.IsReady && (drv.DriveType == DriveType.Fixed || drv.DriveType == DriveType.Removable))
                                     {
-                                        Name = drv.Name,
-                                        Percent = pct,
-                                        UsedGB = used,
-                                        TotalGB = tot
-                                    });
+                                        double tot = drv.TotalSize / (1024.0 * 1024 * 1024);
+                                        double used = (drv.TotalSize - drv.AvailableFreeSpace) / (1024.0 * 1024 * 1024);
+                                        int pct = tot > 0 ? (int)Math.Round((used / tot) * 100.0) : 0;
+                                        freshDrives.Add(new DriveStatInfo
+                                        {
+                                            Name = drv.Name,
+                                            Percent = pct,
+                                            UsedGB = used,
+                                            TotalGB = tot
+                                        });
+                                    }
                                 }
+                                cachedDrivesList = freshDrives;
                             }
-                            cachedDrivesList = freshDrives;
+                            catch { }
                         }
-                        catch { }
+
+                        if (loopCounter % 4 == 0)
+                        {
+                            if (!isDraggingBright)
+                            {
+                                cachedBrightness = HardwareController.GetScreenBrightness();
+                            }
+                            HardwareController.GetWifiStatus(out cachedWifiConn, out cachedWifiSsid, out cachedWifiSig);
+                        }
                     }
                     List<DriveStatInfo> drivesList = cachedDrivesList;
 
                     int volPct;
                     bool isMuted;
                     HardwareController.GetAudioStatus(out volPct, out isMuted);
-
-                    if (loopCounter % 4 == 0)
-                    {
-                        if (!isDraggingBright)
-                        {
-                            cachedBrightness = HardwareController.GetScreenBrightness();
-                        }
-                        HardwareController.GetWifiStatus(out cachedWifiConn, out cachedWifiSsid, out cachedWifiSig);
-                    }
                     loopCounter++;
 
                     double netDown, netUp;
@@ -5762,7 +5809,7 @@ namespace Glance
                 }
                 catch { }
 
-                Thread.Sleep(350);
+                Thread.Sleep((!isExpanded && !isMusicMode) ? 450 : 300);
             }
         }
 
@@ -5808,25 +5855,6 @@ namespace Glance
             currentDur = snap.Duration;
             lastPosSync = DateTime.UtcNow;
 
-            if (!string.IsNullOrWhiteSpace(currentTitle))
-            {
-                mediaTitleText.Text = currentTitle;
-                mediaArtistText.Text = currentArtist;
-                mediaArtistText.Visibility = string.IsNullOrWhiteSpace(currentArtist) ? Visibility.Collapsed : Visibility.Visible;
-            }
-            else
-            {
-                mediaTitleText.Text = "No media playing";
-                mediaArtistText.Text = "";
-                mediaArtistText.Visibility = Visibility.Collapsed;
-            }
-
-            playPauseIconPath.Data = Geometry.Parse(
-                currentStatus == "Playing"
-                    ? "M 6,19 L 10,19 L 10,5 L 6,5 Z M 14,5 L 14,19 L 18,19 L 18,5 Z"
-                    : "M 8,5 L 8,19 L 19,12 Z"
-            );
-
             if (snap.ThumbnailChanged)
             {
                 if (snap.ThumbnailBytes != null && snap.ThumbnailBytes.Length > 0)
@@ -5858,82 +5886,110 @@ namespace Glance
 
             UpdateCollapsedMusicMode();
 
-            if (showLyrics && (currentTitle + "|" + currentArtist) != oldKey)
+            // Battery Rings - only allocate PathGeometry if percentage changed
+            if (batPct != lastBatPct)
             {
-                FetchLyricsIfNeeded();
+                lastBatPct = batPct;
+                collapsedBatteryArc.Data = BuildArcGeometry(new Point(12, 12), (24 - 3.3) / 2.0, batPct);
+                expandedBatteryArc.Data = BuildArcGeometry(new Point(9, 9), (18 - 2.8) / 2.0, batPct);
             }
 
-            // Battery Rings
-            collapsedBatteryArc.Data = BuildArcGeometry(new Point(12, 12), (24 - 3.3) / 2.0, batPct);
-            expandedBatteryArc.Data = BuildArcGeometry(new Point(9, 9), (18 - 2.8) / 2.0, batPct);
-
-            // Slide 1: Top Row
-            sysBatVal.Text = batPct + "%";
-            sysBatSub.Text = isCharging ? "Charging ⚡" : "On Battery";
-            sysBatBar.Width = Math.Max(4, 85.0 * batPct / 100.0);
-
-            sysCpuVal.Text = cpuPct + "%";
-            sysCpuSub.Text = "Active Load";
-            sysCpuBar.Width = Math.Max(4, 85.0 * cpuPct / 100.0);
-
-            sysRamVal.Text = ramPct + "%";
-            sysRamSub.Text = string.Format(CultureInfo.InvariantCulture, "{0:F1} / {1:F1} GB", usedRamGB, totalRamGB);
-            sysRamBar.Width = Math.Max(4, 85.0 * ramPct / 100.0);
-
-            // Slide 1: Bottom Row (Multi-Drive Storage)
-            string sig = string.Join(",", drives.Select(d => d.Name));
-            if (sig != lastDrivesSignature)
-            {
-                lastDrivesSignature = sig;
-                RebuildDrivesGrid(drives);
-            }
-
-            double maxDriveBarWidth = drives.Count > 0 ? Math.Max(60.0, (290.0 / drives.Count) - 24.0) : 130.0;
-            for (int i = 0; i < drives.Count && i < driveValTexts.Count; i++)
-            {
-                var d = drives[i];
-                driveValTexts[i].Text = d.Percent + "%";
-                driveSubTexts[i].Text = string.Format(CultureInfo.InvariantCulture, "{0:F0} / {1:F0} GB", d.UsedGB, d.TotalGB);
-                driveFillBars[i].Width = Math.Max(4, maxDriveBarWidth * d.Percent / 100.0);
-            }
-
-            // Slide 2: Control Center
-            if (wifiConnected)
-            {
-                wifiSsidText.Text = wifiSsid;
-                wifiSubText.Text = wifiSignal + "%";
-                wifiSubText.Foreground = new SolidColorBrush(Color.FromRgb(28, 231, 85));
-                wifiSignalPill.Background = new SolidColorBrush(Color.FromArgb(45, 28, 231, 85));
-            }
-            else
-            {
-                wifiSsidText.Text = "Tidak Terhubung";
-                wifiSubText.Text = "Offline";
-                wifiSubText.Foreground = new SolidColorBrush(Color.FromRgb(248, 113, 113));
-                wifiSignalPill.Background = new SolidColorBrush(Color.FromArgb(45, 248, 113, 113));
-            }
-
+            // Realtime Network Speed
             string downStr = "↓ " + NetworkSpeedMonitor.Format(netDownBps);
             string upStr = "↑ " + NetworkSpeedMonitor.Format(netUpBps);
-            netDownText.Text = downStr;
-            netUpText.Text = upStr;
-            if (collapsedNetDownText != null) collapsedNetDownText.Text = downStr;
-            if (collapsedNetUpText != null) collapsedNetUpText.Text = upStr;
+            if (collapsedNetDownText != null && collapsedNetDownText.Text != downStr) collapsedNetDownText.Text = downStr;
+            if (collapsedNetUpText != null && collapsedNetUpText.Text != upStr) collapsedNetUpText.Text = upStr;
 
-            soundIconText.Text = (isMuted || volPct == 0) ? "🔇" : (volPct < 50 ? "🔉" : "🔊");
-            if (!isDraggingSound)
+            if (isExpanded)
             {
-                int displayVol = isMuted ? 0 : volPct;
-                soundValText.Text = isMuted ? "Mute" : (displayVol + "%");
-                double sw = soundTrackBorder.ActualWidth > 0 ? soundTrackBorder.ActualWidth : 155.0;
-                soundFillBorder.Width = sw * (displayVol / 100.0);
-            }
+                if (!string.IsNullOrWhiteSpace(currentTitle))
+                {
+                    if (mediaTitleText.Text != currentTitle) mediaTitleText.Text = currentTitle;
+                    if (mediaArtistText.Text != currentArtist) mediaArtistText.Text = currentArtist;
+                    mediaArtistText.Visibility = string.IsNullOrWhiteSpace(currentArtist) ? Visibility.Collapsed : Visibility.Visible;
+                }
+                else
+                {
+                    if (mediaTitleText.Text != "No media playing") mediaTitleText.Text = "No media playing";
+                    if (mediaArtistText.Text != "") mediaArtistText.Text = "";
+                    mediaArtistText.Visibility = Visibility.Collapsed;
+                }
 
-            if (!isDraggingBright)
-            {
-                brightValText.Text = brightnessPct + "%";
-                double bw = brightTrackBorder.ActualWidth > 0 ? brightTrackBorder.ActualWidth : 155.0;
-                brightFillBorder.Width = bw * (brightnessPct / 100.0);
+                playPauseIconPath.Data = Geometry.Parse(
+                    currentStatus == "Playing"
+                        ? "M 6,19 L 10,19 L 10,5 L 6,5 Z M 14,5 L 14,19 L 18,19 L 18,5 Z"
+                        : "M 8,5 L 8,19 L 19,12 Z"
+                );
+
+                if (showLyrics && (currentTitle + "|" + currentArtist) != oldKey)
+                {
+                    FetchLyricsIfNeeded();
+                }
+
+                // Slide 1: Top Row
+                sysBatVal.Text = batPct + "%";
+                sysBatSub.Text = isCharging ? "Charging ⚡" : "On Battery";
+                sysBatBar.Width = Math.Max(4, 85.0 * batPct / 100.0);
+
+                sysCpuVal.Text = cpuPct + "%";
+                sysCpuSub.Text = "Active Load";
+                sysCpuBar.Width = Math.Max(4, 85.0 * cpuPct / 100.0);
+
+                sysRamVal.Text = ramPct + "%";
+                sysRamSub.Text = string.Format(CultureInfo.InvariantCulture, "{0:F1} / {1:F1} GB", usedRamGB, totalRamGB);
+                sysRamBar.Width = Math.Max(4, 85.0 * ramPct / 100.0);
+
+                // Slide 1: Bottom Row (Multi-Drive Storage)
+                string sig = string.Join(",", drives.Select(d => d.Name));
+                if (sig != lastDrivesSignature)
+                {
+                    lastDrivesSignature = sig;
+                    RebuildDrivesGrid(drives);
+                }
+
+                double maxDriveBarWidth = drives.Count > 0 ? Math.Max(60.0, (290.0 / drives.Count) - 24.0) : 130.0;
+                for (int i = 0; i < drives.Count && i < driveValTexts.Count; i++)
+                {
+                    var d = drives[i];
+                    driveValTexts[i].Text = d.Percent + "%";
+                    driveSubTexts[i].Text = string.Format(CultureInfo.InvariantCulture, "{0:F0} / {1:F0} GB", d.UsedGB, d.TotalGB);
+                    driveFillBars[i].Width = Math.Max(4, maxDriveBarWidth * d.Percent / 100.0);
+                }
+
+                // Slide 2: Control Center
+                if (wifiConnected)
+                {
+                    wifiSsidText.Text = wifiSsid;
+                    wifiSubText.Text = wifiSignal + "%";
+                    wifiSubText.Foreground = new SolidColorBrush(Color.FromRgb(28, 231, 85));
+                    wifiSignalPill.Background = new SolidColorBrush(Color.FromArgb(45, 28, 231, 85));
+                }
+                else
+                {
+                    wifiSsidText.Text = "Not Connected";
+                    wifiSubText.Text = "Offline";
+                    wifiSubText.Foreground = new SolidColorBrush(Color.FromRgb(248, 113, 113));
+                    wifiSignalPill.Background = new SolidColorBrush(Color.FromArgb(45, 248, 113, 113));
+                }
+
+                netDownText.Text = downStr;
+                netUpText.Text = upStr;
+
+                soundIconText.Text = (isMuted || volPct == 0) ? "🔇" : (volPct < 50 ? "🔉" : "🔊");
+                if (!isDraggingSound)
+                {
+                    int displayVol = isMuted ? 0 : volPct;
+                    soundValText.Text = isMuted ? "Mute" : (displayVol + "%");
+                    double sw = soundTrackBorder.ActualWidth > 0 ? soundTrackBorder.ActualWidth : 155.0;
+                    soundFillBorder.Width = sw * (displayVol / 100.0);
+                }
+
+                if (!isDraggingBright)
+                {
+                    brightValText.Text = brightnessPct + "%";
+                    double bw = brightTrackBorder.ActualWidth > 0 ? brightTrackBorder.ActualWidth : 155.0;
+                    brightFillBorder.Width = bw * (brightnessPct / 100.0);
+                }
             }
 
             if (!IsCompanionWindow && CompanionInstance != null && CompanionInstance.IsVisible)
@@ -6086,6 +6142,7 @@ namespace Glance
 
         private void OnClipboardTick(object sender, EventArgs e)
         {
+            if (!ShowSlideClipboard) return;
             try
             {
                 if (Clipboard.ContainsText())
