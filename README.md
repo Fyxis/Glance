@@ -21,21 +21,21 @@ Unlike heavy modern utilities wrapped in Electron or Chromium that devour hundre
 
 ### 🏝️ 1. Dynamic Island HUD
 * **Ambient Top Notch**: Sits unobtrusively at the top-center of your monitor with a balanced 3-column design:
-  - **Kiri**: Baterai (circular progress arc ring dengan indikator charging ⚡)
-  - **Tengah**: Jam (bold real-time clock)
-  - **Kanan**: Kecepatan Internet Wi-Fi (Download `↓` & Upload `↑` real-time)
+  - **Left**: Battery (circular progress arc ring with charging indicator ⚡)
+  - **Center**: Clock (bold real-time clock)
+  - **Right**: Wi-Fi throughput speed (live Download `↓` & Upload `↑`)
 * **Fluid Expansion**: Expands into an interactive 6-slide control hub on hover or click with custom cubic-bezier spring easing.
 * **Translucent Frosted Glass**: Modern acrylic glass styling with customizable opacity slider in Settings (`⚙️`).
 * **Pin Mode**: Lock Glance in expanded view or let it auto-collapse gracefully when your mouse leaves.
 
 ### 🎵 2. Interactive Media Player, Dual-Column HUD & Synced Lyrics
-* **Split 2-Column Slide Layout**: Slide pertama kini dibagi menjadi dua kolom elegan berdampingan:
-  - **Kolom Kiri (Media Player)**: Cover Album (46×46), judul lagu, artis, timeline seekbar interaktif dengan live timestamp, serta tombol kontrol lengkap (Previous, Play/Pause circular button, Next, dan tombol toggle lirik). Kontrol musik tetap aktif dan bisa diakses kapan saja.
-  - **Kolom Kanan (Widget Kalender & Lirik Lagu Interaktif)**:
-    - **Default (Widget Kalender Estetik)**: Menampilkan nama hari (misal `JUMAT`), tanggal berukuran besar, bulan & tahun (`Oktober 2026`), serta 7-day mini week strip (Senin–Minggu) dengan hari ini disorot pill hijau zamrud. Klik pada widget kalender untuk langsung membuka Jam / Kalender Windows (`ms-clock:`).
-    - **Mode Lirik Lagu (`♪`)**: Klik tombol lirik pada kontrol media untuk mengubah kolom kanan menjadi tampilan lirik lagu yang tersinkronisasi (*synced live scrolling lyrics*) secara otomatis via API LRCLIB. Klik lirik baris mana saja untuk melompat (*seek*) ke bagian lagu tersebut.
-* **Dynamic Waveform Animation**: Lima batang gelombang audio (*waveform bars*) yang bergerak responsif mengikuti peak level suara sistem (`IAudioMeterInformation`) saat notch dalam mode collapsed.
-* **Adaptive Color Palette**: Mengekstrak warna aksen dominan dari cover album lagu yang sedang diputar untuk mewarnai bar waveform secara dinamis.
+* **Split 2-Column Slide Layout**: The primary slide is divided into two sleek side-by-side columns:
+  - **Left Column (Media Player)**: Album Art (46×46), song title, artist, interactive seekbar timeline with live timestamps, and full transport controls (Previous, circular Play/Pause button, Next, and synced lyrics toggle). Media controls remain responsive and accessible at all times.
+  - **Right Column (Aesthetic Calendar & Synced Lyrics)**:
+    - **Default (Glance Calendar)**: Displays the full day name (e.g. `FRIDAY`), prominent date number, month & year (`October 2026`), and a 7-day mini week strip (Sunday–Saturday) with today highlighted in emerald green. Clicking the calendar directly opens Windows Clock & Calendar (`ms-clock:`).
+    - **Synced Lyrics Mode (`♪`)**: Click the lyrics button on the media controls to switch the right column into real-time synchronized scrolling lyrics fetched automatically via LRCLIB. Click any lyric line to instantly seek to that part of the song.
+* **Dynamic Waveform Animation**: Five responsive audio waveform bars that move dynamically based on live system audio peak levels (`IAudioMeterInformation`) when the notch is in collapsed mode.
+* **Adaptive Color Palette**: Extracts the dominant accent color from the active song's album art to dynamically tint the waveform bars.
 
 ### ⚡ 3. Real-Time Network Speed Monitor
 * Displays live download (`↓`) and upload (`↑`) throughput directly on the collapsed pill and expanded system card.
@@ -61,40 +61,40 @@ Unlike heavy modern utilities wrapped in Electron or Chromium that devour hundre
 * **Clipboard History**: Automatically logs copied text snippets with timestamps, copy-back buttons, deletion, and pin-to-top favoriting.
 
 ### 🖥️ 8. Multi-Monitor & Dual-Display Support
-* **Layar 1 Saja (Primary Display)**: Run Glance on your main monitor.
-* **Layar 2 Saja (Secondary Display)**: Move Glance to your secondary monitor.
-* **Kedua Layar (Both Screens)**: Run synchronized dynamic islands on both monitors simultaneously, sharing media playback, live waveform, and hardware telemetry with zero extra CPU/RAM overhead (~20 MB total).
+* **Primary Display Only**: Run Glance exclusively on your primary monitor.
+* **Secondary Display Only**: Position Glance on your secondary monitor.
+* **Both Displays**: Run synchronized dynamic islands on both screens simultaneously, sharing media playback, live waveform, and hardware telemetry with zero extra CPU/RAM overhead (~25 MB total).
 * **Cursor-Aware Glance Search**: `Ctrl + Shift + P` automatically detects which monitor your cursor is currently active on and launches centered on that display.
 * **Instant Switching**: Switch monitors on the fly anytime from Settings (`⚙️`) or the right-click System Tray menu.
 
 ### 📥 9. Drop Shelf / File Staging Zone
-* **Drag-and-Drop ke Notch**: Tarik file apa saja (gambar, dokumen, zip, video) dari desktop atau File Explorer langsung ke notch atas. Notch akan menyala hijau dan menampung file secara instan.
-* **Drag OUT Langsung**: Klik dan seret (drag) file apa saja dari Shelf langsung ke WhatsApp Web, Telegram, Discord, email, browser upload form, atau folder lain.
-* **Quick File Actions**: Buka lokasi file di Windows Explorer (`📂`), salin path file, hapus per item (`✕`), dan tombol "Bersihkan Semua".
-* **Multi-Monitor Sync**: File di Shelf tersinkronisasi otomatis di monitor 1 dan monitor 2.
+* **Drag-and-Drop to Notch**: Drag any file (images, documents, archives, videos) from your desktop or File Explorer directly onto the top notch. The notch illuminates green and instantly stages the file.
+* **Direct Drag OUT**: Click and drag staged files directly from Glance into WhatsApp Web, Telegram, Discord, emails, web upload forms, or other folders.
+* **Quick File Actions**: Open containing folder in Windows Explorer (`📂`), copy file paths, delete individual items (`✕`), and a one-click "Clear All" button.
+* **Multi-Monitor Sync**: Files in the Drop Shelf automatically stay synchronized across monitor 1 and monitor 2.
 
-### 🎨 10. Kustomisasi Penuh: Warna per Area & Manajemen Slide
-* **Dialog Pengaturan Multi-Tab Modern (`⚙️`)**:
-  - `⚙️ Umum`: Startup otomatis Windows, Pin notch agar tetap terbuka, pemilihan monitor (Layar 1 / Layar 2 / Kedua Layar), slider opasitas frosted glass, dan panduan shortcut Glance Search.
-  - `🎨 Kustom Warna`: Personalisasi warna independen untuk setiap elemen/area tanpa mempengaruhi area lain:
-    - **Tema Utama (Main Accent)**: Tombol aksi, glow, dan titik pagination.
-    - **Baterai**: Cincin circular arc pada notch dan bar status baterai di system card.
-    - **Processor (CPU)**: Bar telemetri beban kerja CPU.
-    - **Memory (RAM)**: Bar kapasitas pemakaian RAM.
-    - **Penyimpanan (Disk)**: Bar kapasitas partisi drive (Drive C, D, dst).
-    - **Volume Suara**: Slider dan pill master audio.
-    - **Kecerahan Layar**: Slider hardware brightness.
-    - **Wi-Fi & Speed**: Pill status koneksi dan indikator kecepatan internet.
-    - Dilengkapi **8 preset swatch instan** + **input kode HEX custom** + **live preview swatch** + **tombol reset per area**.
-  - `📑 Kelola Slide`: Centang slide mana saja yang ingin diaktifkan atau dinonaktifkan:
-    - 🎵 *Media Player & Kalender*
-    - 📊 *Sistem & Disk Telemetri*
-    - 🎛️ *Pusat Kontrol (Volume, Brightness, Wi-Fi)*
-    - 📋 *Riwayat Clipboard*
-    - 📝 *Catatan Cepat (Quick Notes)*
+### 🎨 10. Complete Customization: Color Palette & Slide Manager
+* **Modern Multi-Tab Settings Dialog (`⚙️`)**:
+  - `⚙️ General`: Run at Windows startup, Pin expanded HUD, display selector (Primary / Secondary / Both), frosted glass opacity slider, and Glance Search shortcut guide.
+  - `🎨 Color Palette`: Independent color personalization for each element without affecting others:
+    - **Main Accent**: Action buttons, active lyrics, controls, and pagination dots.
+    - **Battery**: Circular arc on collapsed & expanded notch, plus battery telemetry bars.
+    - **Processor (CPU)**: CPU workload telemetry bar and percentage text.
+    - **Memory (RAM)**: Physical RAM consumption telemetry bar.
+    - **Storage (Drives)**: Partition capacity meters for fixed drives (C:, D:, etc.).
+    - **Sound & Master Volume**: Master audio slider and volume indicators.
+    - **Display Brightness**: Hardware monitor brightness slider.
+    - **Wi-Fi & Speed**: Wi-Fi connection pill and live network throughput speed meter.
+    - Features **8 instant preset swatches** + **custom HEX color input** + **live color swatch preview** + **one-click default reset button**.
+  - `📑 Manage Slides`: Select which slides to include or exclude from the notch carousel:
+    - 🎵 *Media Player & Calendar / Lyrics*
+    - ⚡ *System & Storage Telemetry*
+    - 🎛️ *Control Center (Wi-Fi, Audio, Brightness)*
+    - 📋 *Clipboard History*
+    - 📝 *Quick Notes (Scratchpad)*
     - 📥 *Drop Shelf (File Staging)*
-    - *Jika slide dimatikan (misal Catatan Cepat), slide tersebut otomatis dieliminasi dari rotasi carousel, titik navigasi (dots) dibuat ulang secara dinamis sesuai jumlah slide aktif, dan tombol `<` / `>` langsung melompati slide yang dinonaktifkan.*
-* **Penerapan Langsung (Live Instant Sync)**: Perubahan warna dan susunan slide langsung aktif seketika pada kedua monitor saat tombol "Simpan Pengaturan" ditekan tanpa perlu me-restart aplikasi.
+    - *When a slide is turned off (e.g. Quick Notes), it is seamlessly excluded from the carousel rotation, bottom pagination dots are dynamically recalculated, and `<` / `>` navigation arrows cycle strictly across active slides.*
+* **Live Instant Sync**: Color and slide visibility changes take effect immediately on all active displays the moment you click "Save Settings", without requiring an application restart.
 
 ---
 
@@ -136,7 +136,7 @@ Glance was engineered from the ground up for zero-overhead, always-on desktop us
 2. Run the installer.
 3. Choose your installation folder (defaults to `%LOCALAPPDATA%\Programs\Glance`).
 4. Keep **"Run at Startup Windows"** checked if you want Glance to start automatically when your PC boots.
-5. Click **"Pasang Aplikasi (Install)"**.
+5. Click **"Install Now"**.
 
 ### Option 2: Portable Executable
 1. Download [**`Glance.exe`**](Glance.exe).

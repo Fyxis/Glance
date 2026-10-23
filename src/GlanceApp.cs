@@ -960,7 +960,7 @@ namespace Glance
             Grid textHost = new Grid { VerticalAlignment = VerticalAlignment.Center };
             placeholderText = new TextBlock
             {
-                Text = "Glance Search — Ketik nama aplikasi (misal: ch, chrome)...",
+                Text = "Glance Search — Type an app name (e.g. Chrome, Spotify)...",
                 Foreground = new SolidColorBrush(Color.FromRgb(125, 125, 138)),
                 FontSize = 17,
                 FontWeight = FontWeights.Medium,
@@ -1275,7 +1275,7 @@ namespace Glance
 
                 TextBlock enterHint = new TextBlock
                 {
-                    Text = "Buka ↵",
+                    Text = "Open ↵",
                     Foreground = new SolidColorBrush(Color.FromRgb(28, 231, 85)),
                     FontSize = 11.5,
                     FontWeight = FontWeights.Bold,
@@ -1427,7 +1427,7 @@ namespace Glance
         public SettingsWindow(MainWindow owner)
         {
             parentIsland = owner;
-            Title = "Glance — Pengaturan";
+            Title = "Glance — Settings";
             Width = 490;
             Height = 630;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
@@ -1491,14 +1491,14 @@ namespace Glance
             StackPanel titleStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center, IsHitTestVisible = false };
             titleStack.Children.Add(new TextBlock
             {
-                Text = "Pengaturan Glance",
+                Text = "Glance Settings",
                 Foreground = Brushes.White,
                 FontSize = 16,
                 FontWeight = FontWeights.Bold
             });
             titleStack.Children.Add(new TextBlock
             {
-                Text = "Kustomisasi Tampilan, Warna Per Area & Fitur Slide",
+                Text = "Customize Appearance, Accent Colors & Slide Features",
                 Foreground = new SolidColorBrush(Color.FromRgb(140, 140, 155)),
                 FontSize = 10.5,
                 Margin = new Thickness(0, 1, 0, 0)
@@ -1515,13 +1515,13 @@ namespace Glance
             tabBar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(6) });
             tabBar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-            tabBtnGeneral = CreateTabButton("⚙️ Umum", () => SelectTab(0), 0);
+            tabBtnGeneral = CreateTabButton("⚙️ General", () => SelectTab(0), 0);
             Grid.SetColumn(tabBtnGeneral, 0);
 
-            tabBtnColors = CreateTabButton("🎨 Kustom Warna", () => SelectTab(1), 1);
+            tabBtnColors = CreateTabButton("🎨 Color Palette", () => SelectTab(1), 1);
             Grid.SetColumn(tabBtnColors, 2);
 
-            tabBtnSlides = CreateTabButton("📑 Kelola Slide", () => SelectTab(2), 2);
+            tabBtnSlides = CreateTabButton("📑 Manage Slides", () => SelectTab(2), 2);
             Grid.SetColumn(tabBtnSlides, 4);
 
             tabBar.Children.Add(tabBtnGeneral);
@@ -1546,7 +1546,7 @@ namespace Glance
             // 4. Save Button
             saveBtn = new Button
             {
-                Content = "Simpan Pengaturan",
+                Content = "Save Settings",
                 Height = 38,
                 Background = new SolidColorBrush(MainWindow.ColorFromHex(tempColorAccent, Color.FromRgb(28, 231, 85))),
                 Foreground = Brushes.Black,
@@ -1673,7 +1673,7 @@ namespace Glance
             Border cardStartup = CreateOptionCard();
             chkStartup = new CheckBox
             {
-                Content = "Run at Startup Windows (Otomatis saat menyala)",
+                Content = "Run at Windows Startup (Launch automatically on boot)",
                 Foreground = Brushes.White,
                 FontSize = 13,
                 FontWeight = FontWeights.SemiBold,
@@ -1688,7 +1688,7 @@ namespace Glance
             Border cardPin = CreateOptionCard();
             chkPin = new CheckBox
             {
-                Content = "Kunci Posisi Glance Tetap Terbuka (Pin)",
+                Content = "Keep Glance Open (Pin expanded HUD)",
                 Foreground = Brushes.White,
                 FontSize = 13,
                 FontWeight = FontWeights.SemiBold,
@@ -1705,7 +1705,7 @@ namespace Glance
 
             TextBlock lblScreenTitle = new TextBlock
             {
-                Text = "Tampilkan Glance di Layar / Monitor:",
+                Text = "Display Glance on Screen / Monitor:",
                 Foreground = Brushes.White,
                 FontSize = 12.5,
                 FontWeight = FontWeights.SemiBold,
@@ -1718,7 +1718,7 @@ namespace Glance
 
             rbScreen1 = new RadioButton
             {
-                Content = "Layar 1 Saja (Monitor Utama)",
+                Content = "Primary Display Only",
                 GroupName = "DisplayScreenGroup",
                 Foreground = Brushes.White,
                 FontSize = 12,
@@ -1728,7 +1728,7 @@ namespace Glance
             };
             rbScreen2 = new RadioButton
             {
-                Content = screenCount > 1 ? "Layar 2 Saja (Monitor Sekunder)" : "Layar 2 Saja (Tidak terdeteksi)",
+                Content = screenCount > 1 ? "Secondary Display Only" : "Secondary Display Only (Not detected)",
                 GroupName = "DisplayScreenGroup",
                 Foreground = screenCount > 1 ? Brushes.White : new SolidColorBrush(Color.FromRgb(130, 130, 140)),
                 FontSize = 12,
@@ -1739,7 +1739,7 @@ namespace Glance
             };
             rbScreenBoth = new RadioButton
             {
-                Content = screenCount > 1 ? "Kedua Layar (Layar 1 & Layar 2)" : "Kedua Layar (Perlu minimal 2 monitor)",
+                Content = screenCount > 1 ? "Both Displays (Screen 1 & 2)" : "Both Displays (Requires 2+ monitors)",
                 GroupName = "DisplayScreenGroup",
                 Foreground = screenCount > 1 ? Brushes.White : new SolidColorBrush(Color.FromRgb(130, 130, 140)),
                 FontSize = 12,
@@ -1776,7 +1776,7 @@ namespace Glance
             dpAlpha.Children.Add(lblAlphaVal);
             dpAlpha.Children.Add(new TextBlock
             {
-                Text = "Tingkat Kepekatan / Transparansi Background",
+                Text = "Frosted Glass Opacity / Background Blur",
                 Foreground = Brushes.White,
                 FontSize = 12.5,
                 FontWeight = FontWeights.SemiBold
@@ -1805,7 +1805,7 @@ namespace Glance
 
             TextBlock shortcutHint = new TextBlock
             {
-                Text = "💡 Tekan Ctrl + Shift + P kapan saja untuk membuka Glance Search (Pencarian Aplikasi Cepat).",
+                Text = "💡 Press Ctrl + Shift + P anytime to open Glance Search (Spotlight App Launcher).",
                 Foreground = new SolidColorBrush(Color.FromRgb(165, 165, 178)),
                 FontSize = 11.5,
                 TextWrapping = TextWrapping.Wrap,
@@ -1840,7 +1840,7 @@ namespace Glance
 
             TextBlock info = new TextBlock
             {
-                Text = "Pilih warna preset atau ketik kode HEX kustom untuk setiap area tampilan:",
+                Text = "Select a preset color swatch or enter a custom HEX code for each HUD element:",
                 Foreground = new SolidColorBrush(Color.FromRgb(175, 175, 190)),
                 FontSize = 11.5,
                 Margin = new Thickness(2, 0, 2, 8)
@@ -1848,64 +1848,64 @@ namespace Glance
             colorsContentStack.Children.Add(info);
 
             colorsContentStack.Children.Add(CreateColorSettingCard(
-                "Tema Aksen Utama",
-                "Warna aksen kalender, lirik aktif, tombol kontrol, dan slider.",
+                "Main Accent Color",
+                "Accent color for calendar, active lyrics, controls, and sliders.",
                 tempColorAccent,
                 c => { tempColorAccent = c; UpdateAccentVisuals(); }
             ));
 
             colorsContentStack.Children.Add(CreateColorSettingCard(
-                "Area Baterai",
-                "Lingkaran ring baterai di notch collapsed, header & bar status baterai.",
+                "Battery HUD & Ring",
+                "Progress arc ring on collapsed notch, header, and battery level bars.",
                 tempColorBattery,
                 c => tempColorBattery = c
             ));
 
             colorsContentStack.Children.Add(CreateColorSettingCard(
-                "Area CPU (Prosesor)",
-                "Meteran bar & teks persentase aktivitas prosesor.",
+                "Processor (CPU)",
+                "Performance telemetry bar and load percentage text.",
                 tempColorCpu,
                 c => tempColorCpu = c
             ));
 
             colorsContentStack.Children.Add(CreateColorSettingCard(
-                "Area RAM (Memori)",
-                "Meteran bar & teks persentase penggunaan memori RAM.",
+                "Memory (RAM)",
+                "Physical RAM consumption bar and usage telemetry.",
                 tempColorRam,
                 c => tempColorRam = c
             ));
 
             colorsContentStack.Children.Add(CreateColorSettingCard(
-                "Area Partisi Disk",
-                "Meteran bar kapasitas penyimpanan drive harddisk / SSD (C:, D:).",
+                "Storage (Drives)",
+                "Partition capacity bars for fixed storage drives (C:, D:).",
                 tempColorDisk,
                 c => tempColorDisk = c
             ));
 
             colorsContentStack.Children.Add(CreateColorSettingCard(
-                "Area Suara (Sound)",
-                "Slider volume suara sistem di Control Center.",
+                "Sound & Master Volume",
+                "Master audio slider and volume indicator in Control Center.",
                 tempColorSound,
                 c => tempColorSound = c
             ));
 
             colorsContentStack.Children.Add(CreateColorSettingCard(
-                "Area Kecerahan Layar",
-                "Slider pengatur tingkat kecerahan layar monitor di Control Center.",
+                "Display Brightness",
+                "Monitor hardware brightness slider in Control Center.",
                 tempColorBrightness,
                 c => tempColorBrightness = c
             ));
 
             colorsContentStack.Children.Add(CreateColorSettingCard(
-                "Area Wi-Fi & Internet",
-                "Indikator pill sinyal dan teks status koneksi Wi-Fi.",
+                "Wi-Fi & Speed Meter",
+                "Connection pill, signal status, and live throughput speed meter.",
                 tempColorWifi,
                 c => tempColorWifi = c
             ));
 
             Button btnResetColors = new Button
             {
-                Content = "↺ Kembalikan Semua Warna ke Standar",
+                Content = "↺ Reset All Colors to Default",
                 Height = 32,
                 Background = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
                 Foreground = new SolidColorBrush(Color.FromRgb(220, 220, 230)),
@@ -1948,7 +1948,7 @@ namespace Glance
                 BorderThickness = new Thickness(1.5),
                 HorizontalAlignment = HorizontalAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Center,
-                ToolTip = "Warna saat ini"
+                ToolTip = "Current color"
             };
             DockPanel.SetDock(swatch, Dock.Right);
             top.Children.Add(swatch);
@@ -2037,7 +2037,7 @@ namespace Glance
                 VerticalContentAlignment = VerticalAlignment.Center,
                 Padding = new Thickness(4, 0, 2, 0),
                 Margin = new Thickness(4, 0, 0, 0),
-                ToolTip = "Ketik kode warna HEX (contoh: #1CE755)"
+                ToolTip = "Enter HEX color code (e.g. #1CE755)"
             };
             hexBox.TextChanged += (s, e) =>
             {
@@ -2074,7 +2074,7 @@ namespace Glance
 
             TextBlock info = new TextBlock
             {
-                Text = "Pilih slide apa saja yang ingin ditampilkan di dalam carousel notch Glance:",
+                Text = "Select which slides appear inside the Glance notch carousel:",
                 Foreground = new SolidColorBrush(Color.FromRgb(175, 175, 190)),
                 FontSize = 11.5,
                 Margin = new Thickness(2, 0, 2, 8)
@@ -2082,50 +2082,50 @@ namespace Glance
             sp.Children.Add(info);
 
             sp.Children.Add(CreateSlideCheckCard(
-                "🎵 Media Player & Kalender / Lirik",
-                "Pemutar lagu GSMTC, cover album, seekbar, lirik otomatis, dan widget kalender 7 hari.",
+                "🎵 Media Player & Calendar / Lyrics",
+                "GSMTC media playback, album art, interactive seekbar, synced lyrics, and 7-day calendar.",
                 parentIsland == null || parentIsland.ShowSlideMedia,
                 out chkSlideMedia
             ));
 
             sp.Children.Add(CreateSlideCheckCard(
-                "⚡ Status Sistem & Disk Storage",
-                "Monitor real-time daya baterai, CPU load, RAM fisik, serta kapasitas partisi drive C:/D:.",
+                "⚡ System & Storage Telemetry",
+                "Real-time battery status, CPU workload, physical RAM, and fixed drive partition meters.",
                 parentIsland == null || parentIsland.ShowSlideSystem,
                 out chkSlideSystem
             ));
 
             sp.Children.Add(CreateSlideCheckCard(
-                "🎛️ Control Center (Wi-Fi, Suara, Kecerahan)",
-                "Informasi Wi-Fi & internet speed, slider volume suara, dan slider kecerahan monitor.",
+                "🎛️ Control Center (Wi-Fi, Audio, Brightness)",
+                "Wi-Fi telemetry & network speed, master hardware volume slider, and display brightness.",
                 parentIsland == null || parentIsland.ShowSlideControl,
                 out chkSlideControl
             ));
 
             sp.Children.Add(CreateSlideCheckCard(
-                "📋 Riwayat Clipboard",
-                "Pencatat otomatis snippet teks yang disalin ke clipboard dengan fitur pin favorit.",
+                "📋 Clipboard History",
+                "Automatic clipboard history manager with copy-back shortcuts and favorite pinning.",
                 parentIsland == null || parentIsland.ShowSlideClipboard,
                 out chkSlideClipboard
             ));
 
             sp.Children.Add(CreateSlideCheckCard(
-                "📝 Catatan Cepat (Quick Notes)",
-                "Scratchpad to-do list & catatan kilat tanpa perlu membuka aplikasi teks pihak ketiga.",
+                "📝 Quick Notes (Scratchpad)",
+                "Instant scratchpad for to-dos, thoughts, and snippets without opening heavy editors.",
                 parentIsland == null || parentIsland.ShowSlideNotes,
                 out chkSlideNotes
             ));
 
             sp.Children.Add(CreateSlideCheckCard(
-                "📥 File Shelf (Tampung & Drag File)",
-                "Area drop-zone untuk menampung file dari Explorer dan drag langsung ke WhatsApp/Discord.",
+                "📥 Drop Shelf (File Staging)",
+                "Drag-and-drop staging zone to easily stash files and drag them directly into chat/apps.",
                 parentIsland == null || parentIsland.ShowSlideShelf,
                 out chkSlideShelf
             ));
 
             TextBlock tip = new TextBlock
             {
-                Text = "💡 Tips: Minimal 1 slide harus tetap dicentang agar carousel notch tetap dapat berfungsi.",
+                Text = "💡 Tip: At least 1 slide must remain checked so the notch carousel navigation can operate.",
                 Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 165)),
                 FontSize = 11,
                 TextWrapping = TextWrapping.Wrap,
@@ -2317,12 +2317,12 @@ namespace Glance
         private Border nextSlideBtn;
         private string[] slideTitles =
         {
-            "Media Player & Kalender / Lirik",
-            "Baterai, CPU, RAM & Disk (C: / D:)",
+            "Media Player & Calendar / Lyrics",
+            "Battery, CPU, RAM & Storage (C: / D:)",
             "Wi-Fi, Sound & Brightness",
-            "Riwayat Clipboard",
-            "Catatan Cepat",
-            "File Shelf (Tampung & Drag File)"
+            "Clipboard History",
+            "Quick Notes",
+            "File Shelf (Staging Zone)"
         };
 
         // Slide 0: Media Player + Calendar / Lyrics UI
@@ -2333,9 +2333,9 @@ namespace Glance
         private TextBlock calMonthYearText;
         private StackPanel calWeekStrip;
         private int lastCalendarDay = -1;
-        private static readonly string[] IndonesianDayNames = { "MINGGU", "SENIN", "SELASA", "RABU", "KAMIS", "JUMAT", "SABTU" };
-        private static readonly string[] IndonesianMonthNames = { "Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember" };
-        private static readonly string[] DayInitials = { "M", "S", "S", "R", "K", "J", "S" };
+        private static readonly string[] EnglishDayNames = { "SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY" };
+        private static readonly string[] EnglishMonthNames = { "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" };
+        private static readonly string[] DayInitials = { "S", "M", "T", "W", "T", "F", "S" };
         private Grid lyricsPanel;
         private Border albumArtBox;
         private ImageBrush albumImageBrush;
@@ -3169,7 +3169,7 @@ namespace Glance
                 HorizontalAlignment = HorizontalAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Center,
                 Height = 18,
-                ToolTip = "Musik sedang diputar"
+                ToolTip = "Media playing"
             };
             int barCount = waveProfile.Length;
             waveBars = new Rectangle[barCount];
@@ -3223,7 +3223,7 @@ namespace Glance
                 HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Center,
                 Cursor = Cursors.Hand,
-                ToolTip = "Spotlight Search Aplikasi (Ctrl + Shift + P)"
+                ToolTip = "Glance Search (Ctrl + Shift + P)"
             };
             TextBlock searchQuickIcon = new TextBlock
             {
@@ -3292,7 +3292,7 @@ namespace Glance
                 CornerRadius = new CornerRadius(11),
                 Background = Brushes.Transparent,
                 Cursor = Cursors.Hand,
-                ToolTip = "Pengaturan Transparansi & Run at Startup Windows",
+                ToolTip = "Glance Settings",
                 Margin = new Thickness(0, 0, 4, 0)
             };
             TextBlock gearIcon = new TextBlock
@@ -3319,7 +3319,7 @@ namespace Glance
                 CornerRadius = new CornerRadius(11),
                 Background = Brushes.Transparent,
                 Cursor = Cursors.Hand,
-                ToolTip = "Kunci agar tetap terbuka (Pin)"
+                ToolTip = "Pin expanded HUD"
             };
             pinBtnIcon = new TextBlock
             {
@@ -3450,7 +3450,7 @@ namespace Glance
             StackPanel titleCol = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
             mediaTitleText = new TextBlock
             {
-                Text = "Tidak ada media",
+                Text = "No media playing",
                 Foreground = Brushes.White,
                 FontSize = 13,
                 FontWeight = FontWeights.Bold,
@@ -3548,7 +3548,7 @@ namespace Glance
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(0, 0, 8, 0),
                 Cursor = Cursors.Hand,
-                ToolTip = "Tampilkan / Sembunyikan Lirik Lagu di Sisi Kanan"
+                ToolTip = "Toggle synchronized lyrics"
             };
             lyricsBtnIcon = new Path
             {
@@ -3564,11 +3564,11 @@ namespace Glance
             lyricsBtnBorder.MouseLeftButtonUp += (s, e) => { e.Handled = true; ToggleLyricsView(); };
             controlsRow.Children.Add(lyricsBtnBorder);
 
-            Border btnPrev = CreateMediaIconBtn("M 11,18 L 11,6 L 2.5,12 Z M 11.5,12 L 20,18 L 20,6 Z", 14, "Lagu Sebelumnya");
+            Border btnPrev = CreateMediaIconBtn("M 11,18 L 11,6 L 2.5,12 Z M 11.5,12 L 20,18 L 20,6 Z", 14, "Previous Track");
             btnPrev.Margin = new Thickness(0, 0, 6, 0);
             btnPrev.MouseLeftButtonUp += (s, e) => { e.Handled = true; pendingCommand = "prev"; };
 
-            Border btnPlay = CreateMediaIconBtn("M 8,5 L 8,19 L 19,12 Z", 15, "Putar / Jeda", out playPauseIconPath);
+            Border btnPlay = CreateMediaIconBtn("M 8,5 L 8,19 L 19,12 Z", 15, "Play / Pause", out playPauseIconPath);
             btnPlay.Width = 32;
             btnPlay.Height = 32;
             btnPlay.CornerRadius = new CornerRadius(16);
@@ -3578,7 +3578,7 @@ namespace Glance
             btnPlay.MouseLeave += (s, e) => btnPlay.Background = new SolidColorBrush(Color.FromArgb(35, 255, 255, 255));
             btnPlay.MouseLeftButtonUp += (s, e) => { e.Handled = true; pendingCommand = "play-pause"; };
 
-            Border btnNext = CreateMediaIconBtn("M 4,18 L 12.5,12 L 4,6 Z M 13,6 L 13,18 L 21.5,12 Z", 14, "Lagu Berikutnya");
+            Border btnNext = CreateMediaIconBtn("M 4,18 L 12.5,12 L 4,6 Z M 13,6 L 13,18 L 21.5,12 Z", 14, "Next Track");
             btnNext.MouseLeftButtonUp += (s, e) => { e.Handled = true; pendingCommand = "next"; };
 
             controlsRow.Children.Add(btnPrev);
@@ -3628,7 +3628,7 @@ namespace Glance
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 VerticalAlignment = VerticalAlignment.Center,
                 Cursor = Cursors.Hand,
-                ToolTip = "Kalender Glance (Klik untuk buka Jam / Kalender Windows, klik ♪ di kiri untuk lirik lagu)"
+                ToolTip = "Glance Calendar (Click to open Windows Clock, click ♪ for lyrics)"
             };
             calendarPanel.MouseLeftButtonUp += (s, e) =>
             {
@@ -3644,7 +3644,7 @@ namespace Glance
 
             calDayNameText = new TextBlock
             {
-                Text = "HARI",
+                Text = "DAY",
                 Foreground = new SolidColorBrush(Color.FromRgb(28, 231, 85)), // Emerald Accent
                 FontSize = 10,
                 FontWeight = FontWeights.Bold,
@@ -3664,7 +3664,7 @@ namespace Glance
 
             calMonthYearText = new TextBlock
             {
-                Text = "Bulan Tahun",
+                Text = "Month Year",
                 Foreground = new SolidColorBrush(Color.FromRgb(185, 185, 195)),
                 FontSize = 11,
                 FontWeight = FontWeights.SemiBold,
@@ -3700,7 +3700,7 @@ namespace Glance
 
             lyricsHeaderText = new TextBlock
             {
-                Text = "Lirik Lagu",
+                Text = "Lyrics",
                 Foreground = new SolidColorBrush(Color.FromRgb(28, 231, 85)),
                 FontSize = 10,
                 FontWeight = FontWeights.Bold,
@@ -3718,7 +3718,7 @@ namespace Glance
                 CornerRadius = new CornerRadius(8),
                 Background = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
                 Cursor = Cursors.Hand,
-                ToolTip = "Tutup Lirik & Kembali ke Kalender",
+                ToolTip = "Close lyrics and return to calendar",
                 HorizontalAlignment = HorizontalAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Center
             };
@@ -3777,10 +3777,10 @@ namespace Glance
             Color accent = ColorFromHex(ColorAccent, Color.FromRgb(28, 231, 85));
 
             int dayOfWeekIdx = (int)now.DayOfWeek;
-            calDayNameText.Text = IndonesianDayNames[dayOfWeekIdx];
+            calDayNameText.Text = EnglishDayNames[dayOfWeekIdx];
             calDayNameText.Foreground = new SolidColorBrush(accent);
             calDateNumText.Text = now.Day.ToString();
-            calMonthYearText.Text = IndonesianMonthNames[now.Month - 1] + " " + now.Year;
+            calMonthYearText.Text = EnglishMonthNames[now.Month - 1] + " " + now.Year;
 
             if (calWeekStrip != null)
             {
@@ -3864,7 +3864,7 @@ namespace Glance
             Color colCpu = ColorFromHex(ColorCpu, Color.FromRgb(56, 189, 248));
             Color colRam = ColorFromHex(ColorRam, Color.FromRgb(192, 132, 252));
 
-            Border batCard = CreateTransparentStatCard("Baterai", colBattery, out sysBatVal, out sysBatBar, out sysBatSub);
+            Border batCard = CreateTransparentStatCard("Battery", colBattery, out sysBatVal, out sysBatBar, out sysBatSub);
             Grid.SetColumn(batCard, 0);
 
             Border cpuCard = CreateTransparentStatCard("CPU", colCpu, out sysCpuVal, out sysCpuBar, out sysCpuSub);
@@ -4013,7 +4013,7 @@ namespace Glance
                 CornerRadius = new CornerRadius(11),
                 Padding = new Thickness(11, 6, 11, 6),
                 Cursor = Cursors.Hand,
-                ToolTip = "Klik untuk membuka pengaturan Wi-Fi Windows"
+                ToolTip = "Click to open Windows Wi-Fi Settings"
             };
             wifiCard.MouseLeftButtonUp += (s, e) =>
             {
@@ -4035,7 +4035,7 @@ namespace Glance
             {
                 Width = 96,
                 VerticalAlignment = VerticalAlignment.Center,
-                ToolTip = "Kecepatan internet real-time (Download / Upload)"
+                ToolTip = "Real-time network speed (Download / Upload)"
             };
             netDownText = new TextBlock
             {
@@ -4111,7 +4111,7 @@ namespace Glance
             wifiTextStack.Children.Add(wifiLabelRow);
             wifiSsidText = new TextBlock
             {
-                Text = "Memeriksa...",
+                Text = "Checking...",
                 Foreground = Brushes.White,
                 FontSize = 12.5,
                 FontWeight = FontWeights.Bold,
@@ -4140,7 +4140,7 @@ namespace Glance
                 out soundValText
             );
             soundIconText.Cursor = Cursors.Hand;
-            soundIconText.ToolTip = "Klik untuk Mute / Unmute Suara";
+            soundIconText.ToolTip = "Click to Mute / Unmute Audio";
             soundIconText.MouseLeftButtonUp += (s, e) =>
             {
                 e.Handled = true;
@@ -4315,7 +4315,7 @@ namespace Glance
             DockPanel header = new DockPanel { Margin = new Thickness(0, 0, 0, 4) };
             TextBlock title = new TextBlock
             {
-                Text = "Riwayat Clipboard (Ctrl+C)",
+                Text = "Clipboard History (Ctrl+C)",
                 Foreground = new SolidColorBrush(Color.FromRgb(228, 228, 235)),
                 FontSize = 12,
                 FontWeight = FontWeights.Bold,
@@ -4331,7 +4331,7 @@ namespace Glance
             };
             TextBlock clearTxt = new TextBlock
             {
-                Text = "Bersihkan",
+                Text = "Clear All",
                 Foreground = new SolidColorBrush(Color.FromRgb(210, 210, 220)),
                 FontSize = 10.5,
                 FontWeight = FontWeights.SemiBold
@@ -4447,7 +4447,7 @@ namespace Glance
             StackPanel titleSp = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
             TextBlock title = new TextBlock
             {
-                Text = "Drop Shelf (Penampung File)",
+                Text = "Drop Shelf (File Staging)",
                 Foreground = new SolidColorBrush(Color.FromRgb(228, 228, 235)),
                 FontSize = 12,
                 FontWeight = FontWeights.Bold
@@ -4473,7 +4473,7 @@ namespace Glance
             };
             TextBlock clearTxt = new TextBlock
             {
-                Text = "Bersihkan",
+                Text = "Clear All",
                 Foreground = new SolidColorBrush(Color.FromRgb(210, 210, 220)),
                 FontSize = 10.5,
                 FontWeight = FontWeights.SemiBold
@@ -4545,7 +4545,7 @@ namespace Glance
 
             if (shelfCountText != null)
             {
-                shelfCountText.Text = shelfList.Count > 0 ? string.Format("({0} file)", shelfList.Count) : "";
+                shelfCountText.Text = shelfList.Count > 0 ? string.Format("({0} files)", shelfList.Count) : "";
             }
 
             if (shelfList.Count == 0)
@@ -4570,7 +4570,7 @@ namespace Glance
                 };
                 TextBlock t1 = new TextBlock
                 {
-                    Text = "Tarik & Lepas (Drag & Drop) file ke sini",
+                    Text = "Drag & Drop files here",
                     Foreground = Brushes.White,
                     FontSize = 12,
                     FontWeight = FontWeights.SemiBold,
@@ -4578,7 +4578,7 @@ namespace Glance
                 };
                 TextBlock t2 = new TextBlock
                 {
-                    Text = "File akan ditampung sementara untuk dipindahkan ke app lain",
+                    Text = "Files are held here for quick staging and dragging into other apps",
                     Foreground = new SolidColorBrush(Color.FromRgb(140, 140, 150)),
                     FontSize = 10.5,
                     HorizontalAlignment = HorizontalAlignment.Center,
@@ -4604,7 +4604,7 @@ namespace Glance
                     Padding = new Thickness(8, 5, 8, 5),
                     Margin = new Thickness(0, 0, 0, 5),
                     Cursor = Cursors.Hand,
-                    ToolTip = curItem.filePath + "\n(Drag untuk pindahkan ke app lain)"
+                    ToolTip = curItem.filePath + "\n(Drag to drop into other apps)"
                 };
 
                 Grid rowGrid = new Grid();
@@ -4665,7 +4665,7 @@ namespace Glance
                     Foreground = new SolidColorBrush(Color.FromRgb(170, 170, 180)),
                     Margin = new Thickness(0, 0, 8, 0),
                     Cursor = Cursors.Hand,
-                    ToolTip = "Buka folder lokasi file"
+                    ToolTip = "Open containing folder"
                 };
                 openBtn.MouseLeftButtonUp += (s, ev) =>
                 {
@@ -4686,7 +4686,7 @@ namespace Glance
                     FontSize = 11,
                     Foreground = new SolidColorBrush(Color.FromRgb(160, 160, 170)),
                     Cursor = Cursors.Hand,
-                    ToolTip = "Hapus dari Shelf"
+                    ToolTip = "Remove from Shelf"
                 };
                 delBtn.MouseLeftButtonUp += (s, ev) =>
                 {
@@ -4872,7 +4872,7 @@ namespace Glance
                 CornerRadius = new CornerRadius(11),
                 Background = new SolidColorBrush(Color.FromArgb(75, 255, 255, 255)),
                 Cursor = Cursors.Hand,
-                ToolTip = isLeft ? "Halaman Sebelumnya" : "Halaman Berikutnya"
+                ToolTip = isLeft ? "Previous Slide" : "Next Slide"
             };
             Path arrow = new Path
             {
@@ -5422,11 +5422,11 @@ namespace Glance
             {
                 loadedLyricsKey = "";
                 syncedLyrics.Clear();
-                lyricsHeaderText.Text = "Lirik Lagu";
+                lyricsHeaderText.Text = "Lyrics";
                 lyricsStack.Children.Clear();
                 lyricsStack.Children.Add(new TextBlock
                 {
-                    Text = "Putar lagu di Spotify / Browser untuk melihat lirik otomatis",
+                    Text = "Play a song in Spotify or your browser to view synchronized lyrics",
                     Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 160)),
                     FontSize = 10.5,
                     TextAlignment = TextAlignment.Center,
@@ -5446,7 +5446,7 @@ namespace Glance
             lyricsStack.Children.Clear();
             lyricsStack.Children.Add(new TextBlock
             {
-                Text = "Mencari lirik lagu...",
+                Text = "Searching for lyrics...",
                 Foreground = new SolidColorBrush(Color.FromRgb(160, 160, 170)),
                 FontSize = 10.5,
                 TextAlignment = TextAlignment.Center,
@@ -5553,7 +5553,7 @@ namespace Glance
                     {
                         lyricsStack.Children.Add(new TextBlock
                         {
-                            Text = "Lirik belum tersedia untuk lagu ini",
+                            Text = "No lyrics found for this track",
                             Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 160)),
                             FontSize = 10.5,
                             TextAlignment = TextAlignment.Center,
@@ -5816,7 +5816,7 @@ namespace Glance
             }
             else
             {
-                mediaTitleText.Text = "Tidak ada media";
+                mediaTitleText.Text = "No media playing";
                 mediaArtistText.Text = "";
                 mediaArtistText.Visibility = Visibility.Collapsed;
             }
@@ -5869,11 +5869,11 @@ namespace Glance
 
             // Slide 1: Top Row
             sysBatVal.Text = batPct + "%";
-            sysBatSub.Text = isCharging ? "Mengisi Daya ⚡" : "Mode Baterai";
+            sysBatSub.Text = isCharging ? "Charging ⚡" : "On Battery";
             sysBatBar.Width = Math.Max(4, 85.0 * batPct / 100.0);
 
             sysCpuVal.Text = cpuPct + "%";
-            sysCpuSub.Text = "Prosesor Aktif";
+            sysCpuSub.Text = "Active Load";
             sysCpuBar.Width = Math.Max(4, 85.0 * cpuPct / 100.0);
 
             sysRamVal.Text = ramPct + "%";
@@ -6119,7 +6119,7 @@ namespace Glance
             {
                 clipListPanel.Children.Add(new TextBlock
                 {
-                    Text = "Salin teks (Ctrl+C) untuk menyimpan di sini",
+                    Text = "Copy text (Ctrl+C) to save snippets here",
                     Foreground = new SolidColorBrush(Color.FromRgb(145, 145, 155)),
                     FontSize = 11.5,
                     TextAlignment = TextAlignment.Center,
@@ -6139,7 +6139,7 @@ namespace Glance
                     Padding = new Thickness(8, 5, 8, 5),
                     Margin = new Thickness(0, 0, 0, 5),
                     Cursor = Cursors.Hand,
-                    ToolTip = "Klik untuk menyalin kembali"
+                    ToolTip = "Click to copy back to clipboard"
                 };
 
                 DockPanel dp = new DockPanel();
@@ -6180,7 +6180,7 @@ namespace Glance
                     {
                         lastClipboardText = item.text;
                         Clipboard.SetText(item.text);
-                        txt.Text = "✓ Tersalin ke Clipboard!";
+                        txt.Text = "✓ Copied to Clipboard!";
                         txt.Foreground = new SolidColorBrush(Color.FromRgb(28, 231, 85));
                     }
                     catch { }
@@ -6213,7 +6213,7 @@ namespace Glance
             {
                 notesListPanel.Children.Add(new TextBlock
                 {
-                    Text = "Belum ada catatan cepat",
+                    Text = "No quick notes yet",
                     Foreground = new SolidColorBrush(Color.FromRgb(145, 145, 155)),
                     FontSize = 11.5,
                     TextAlignment = TextAlignment.Center,
@@ -6313,14 +6313,14 @@ namespace Glance
 
             Forms.ContextMenuStrip menu = new Forms.ContextMenuStrip();
             menu.Items.Add("Glance Search (Ctrl+Shift+P)", null, (s, e) => Dispatcher.Invoke(ToggleSpotlightSearch));
-            menu.Items.Add("Pengaturan Glance...", null, (s, e) => Dispatcher.Invoke(OpenSettingsDialog));
+            menu.Items.Add("Glance Settings...", null, (s, e) => Dispatcher.Invoke(OpenSettingsDialog));
 
             int screenCount = Forms.Screen.AllScreens.Length;
-            Forms.ToolStripMenuItem screenSubMenu = new Forms.ToolStripMenuItem("Pilih Layar / Monitor");
+            Forms.ToolStripMenuItem screenSubMenu = new Forms.ToolStripMenuItem("Display Selection");
 
-            trayItemScr1 = new Forms.ToolStripMenuItem("Layar 1 Saja (Utama)", null, (s, e) => ApplyDisplayMode("screen1"));
-            trayItemScr2 = new Forms.ToolStripMenuItem(screenCount > 1 ? "Layar 2 Saja (Sekunder)" : "Layar 2 Saja (Tidak terdeteksi)", null, (s, e) => { if (screenCount > 1) ApplyDisplayMode("screen2"); });
-            trayItemBoth = new Forms.ToolStripMenuItem(screenCount > 1 ? "Kedua Layar" : "Kedua Layar (Perlu 2 monitor)", null, (s, e) => { if (screenCount > 1) ApplyDisplayMode("both"); });
+            trayItemScr1 = new Forms.ToolStripMenuItem("Primary Display Only", null, (s, e) => ApplyDisplayMode("screen1"));
+            trayItemScr2 = new Forms.ToolStripMenuItem(screenCount > 1 ? "Secondary Display Only" : "Secondary Display Only (Not detected)", null, (s, e) => { if (screenCount > 1) ApplyDisplayMode("screen2"); });
+            trayItemBoth = new Forms.ToolStripMenuItem(screenCount > 1 ? "Both Displays" : "Both Displays (Requires 2+ monitors)", null, (s, e) => { if (screenCount > 1) ApplyDisplayMode("both"); });
 
             trayItemScr2.Enabled = screenCount > 1;
             trayItemBoth.Enabled = screenCount > 1;
@@ -6330,9 +6330,9 @@ namespace Glance
             screenSubMenu.DropDownItems.Add(trayItemBoth);
             menu.Items.Add(screenSubMenu);
 
-            menu.Items.Add("Kunci / Lepas Posisi Terbuka (Pin)", null, (s, e) => Dispatcher.Invoke(() => SetPinned(!IsPinned)));
+            menu.Items.Add("Pin / Unpin Expanded HUD", null, (s, e) => Dispatcher.Invoke(() => SetPinned(!IsPinned)));
             menu.Items.Add(new Forms.ToolStripSeparator());
-            menu.Items.Add("Keluar dari Glance", null, (s, e) => Dispatcher.Invoke(() => Application.Current.Shutdown()));
+            menu.Items.Add("Exit Glance", null, (s, e) => Dispatcher.Invoke(() => Application.Current.Shutdown()));
 
             trayIcon.ContextMenuStrip = menu;
             trayIcon.DoubleClick += (s, e) => Dispatcher.Invoke(OpenSettingsDialog);

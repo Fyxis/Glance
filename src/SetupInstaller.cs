@@ -177,7 +177,7 @@ namespace GlanceSetup
             });
             titleStack.Children.Add(new TextBlock
             {
-                Text = "Native Windows Desktop Companion (v1.0 • Tanpa Electron/Chromium)",
+                Text = "Native Windows Desktop Companion (v1.0 • Zero Electron/Chromium)",
                 Foreground = new SolidColorBrush(Color.FromRgb(145, 145, 155)),
                 FontSize = 11.5
             });
@@ -192,7 +192,7 @@ namespace GlanceSetup
             // 2. Install Directory Box
             root.Children.Add(new TextBlock
             {
-                Text = "Lokasi Instalasi Aplikasi:",
+                Text = "Installation Location:",
                 Foreground = new SolidColorBrush(Color.FromRgb(200, 200, 210)),
                 FontSize = 12,
                 FontWeight = FontWeights.SemiBold,
@@ -220,7 +220,7 @@ namespace GlanceSetup
 
             Button btnBrowse = new Button
             {
-                Content = "Pilih...",
+                Content = "Browse...",
                 Height = 32,
                 Background = new SolidColorBrush(Color.FromRgb(38, 38, 46)),
                 Foreground = Brushes.White,
@@ -233,7 +233,7 @@ namespace GlanceSetup
             {
                 using (var dlg = new Forms.FolderBrowserDialog())
                 {
-                    dlg.Description = "Pilih folder instalasi Glance";
+                    dlg.Description = "Select Glance installation directory";
                     dlg.SelectedPath = txtInstallDir.Text;
                     if (dlg.ShowDialog() == Forms.DialogResult.OK)
                     {
@@ -250,7 +250,7 @@ namespace GlanceSetup
             // 3. Setup Options (Checkboxes including "Run at Startup Windows")
             root.Children.Add(new TextBlock
             {
-                Text = "Opsi Pengaturan & Startup:",
+                Text = "Setup & Startup Options:",
                 Foreground = new SolidColorBrush(Color.FromRgb(200, 200, 210)),
                 FontSize = 12,
                 FontWeight = FontWeights.SemiBold,
@@ -270,22 +270,22 @@ namespace GlanceSetup
             StackPanel optsStack = new StackPanel();
 
             chkRunAtStartup = CreateSetupCheckBox(
-                "Run at Startup Windows (Jalankan otomatis saat Windows menyala)",
+                "Run at Windows Startup (Launch automatically on boot)",
                 true,
                 true
             );
             chkDesktopShortcut = CreateSetupCheckBox(
-                "Buat Shortcut di Desktop (Glance)",
+                "Create Desktop Shortcut (Glance)",
                 true,
                 false
             );
             chkStartMenuShortcut = CreateSetupCheckBox(
-                "Buat Shortcut di Start Menu Windows",
+                "Create Start Menu Shortcut",
                 true,
                 false
             );
             chkLaunchAfterInstall = CreateSetupCheckBox(
-                "Jalankan Glance setelah instalasi selesai",
+                "Launch Glance after installation finishes",
                 true,
                 false
             );
@@ -300,7 +300,7 @@ namespace GlanceSetup
             // 4. Progress & Status Area
             statusLabel = new TextBlock
             {
-                Text = "Siap memasang Glance di komputer Anda.",
+                Text = "Ready to install Glance on your computer.",
                 Foreground = new SolidColorBrush(Color.FromRgb(160, 160, 175)),
                 FontSize = 11.5,
                 Margin = new Thickness(2, 0, 2, 6)
@@ -334,7 +334,7 @@ namespace GlanceSetup
 
             btnUninstall = new Button
             {
-                Content = "Uninstall / Hapus",
+                Content = "Uninstall Glance",
                 Height = 40,
                 Background = new SolidColorBrush(Color.FromRgb(42, 28, 32)),
                 Foreground = new SolidColorBrush(Color.FromRgb(248, 113, 113)),
@@ -348,7 +348,7 @@ namespace GlanceSetup
 
             btnInstall = new Button
             {
-                Content = "Install / Pasang Sekarang",
+                Content = "Install Now",
                 Height = 40,
                 Background = new SolidColorBrush(Color.FromRgb(28, 231, 85)),
                 Foreground = Brushes.Black,
@@ -392,7 +392,7 @@ namespace GlanceSetup
                 string installDir = txtInstallDir.Text.Trim();
                 if (string.IsNullOrEmpty(installDir))
                 {
-                    MessageBox.Show("Silakan pilih folder instalasi terlebih dahulu.", "Setup", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    MessageBox.Show("Please select an installation folder first.", "Setup", MessageBoxButton.OK, MessageBoxImage.Warning);
                     return;
                 }
 
@@ -491,7 +491,7 @@ namespace GlanceSetup
                 catch { }
 
                 progressFill.Width = progressTrack.ActualWidth;
-                statusLabel.Text = "✓ Instalasi berhasil! Run at Startup Windows: " + (chkRunAtStartup.IsChecked == true ? "AKTIF" : "NONAKTIF");
+                statusLabel.Text = "✓ Installation succeeded! Run at Windows Startup: " + (chkRunAtStartup.IsChecked == true ? "ENABLED" : "DISABLED");
                 statusLabel.Foreground = new SolidColorBrush(Color.FromRgb(28, 231, 85));
 
                 if (chkLaunchAfterInstall.IsChecked == true)
@@ -505,11 +505,11 @@ namespace GlanceSetup
                 }
 
                 MessageBox.Show(
-                    "Glance berhasil dipasang!\n\n" +
-                    "• Lokasi: " + targetExe + "\n" +
-                    "• Run at Startup Windows: " + (chkRunAtStartup.IsChecked == true ? "Aktif (Otomatis jalan saat Windows nyala)" : "Nonaktif") + "\n\n" +
-                    "Anda juga dapat mengubah opsi Run at Startup kapan saja melalui ikon ⚙️ di Glance atau klik kanan ikon di System Tray.",
-                    "Instalasi Selesai",
+                    "Glance was successfully installed!\n\n" +
+                    "• Location: " + targetExe + "\n" +
+                    "• Run at Windows Startup: " + (chkRunAtStartup.IsChecked == true ? "Enabled (Automatically starts on boot)" : "Disabled") + "\n\n" +
+                    "You can also change Startup and Display options anytime via the ⚙️ icon or right-clicking the System Tray icon.",
+                    "Installation Complete",
                     MessageBoxButton.OK,
                     MessageBoxImage.Information
                 );
@@ -517,7 +517,7 @@ namespace GlanceSetup
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Gagal memasang aplikasi: " + ex.Message, "Error Setup", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show("Failed to install application: " + ex.Message, "Setup Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -573,14 +573,14 @@ namespace GlanceSetup
                 }
 
                 progressFill.Width = progressTrack.ActualWidth;
-                statusLabel.Text = "✓ Glance & Startup berhasil dihapus.";
+                statusLabel.Text = "✓ Glance & Startup entries have been removed.";
                 statusLabel.Foreground = new SolidColorBrush(Color.FromRgb(251, 191, 36));
 
-                MessageBox.Show("Glance dan opsi Startup telah berhasil dihapus dari sistem.", "Uninstall Selesai", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show("Glance and its Startup entries have been successfully removed from your system.", "Uninstall Complete", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Gagal menghapus instalasi: " + ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show("Failed to uninstall: " + ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
