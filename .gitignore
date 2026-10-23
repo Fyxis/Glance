@@ -1,0 +1,19 @@
+# Logs & temporary files
+*.log
+*.tmp
+crash.log
+error.log
+
+# Visual Studio / VS Code / Rider cache
+.vs/
+.vscode/
+.idea/
+bin/
+obj/
+*.suo
+*.user
+
+# Windows OS metadata
+Thumbs.db
+ehthumbs.db
+Desktop.ini
