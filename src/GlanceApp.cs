@@ -47,6 +47,15 @@ namespace Glance
         public bool pinned { get; set; }
     }
 
+    public class ShelfItem
+    {
+        public string id { get; set; }
+        public string filePath { get; set; }
+        public string fileName { get; set; }
+        public long fileSizeBytes { get; set; }
+        public string timeAdded { get; set; }
+    }
+
     public class AppConfig
     {
         public int backgroundAlpha { get; set; }
@@ -1597,11 +1606,11 @@ namespace Glance
     public class MainWindow : Window
     {
         private const int HOTKEY_ID_SPOTLIGHT = 9001;
-        private const double CollapsedWidth = 150;
+        private const double CollapsedWidth = 216;
         private const double CollapsedHeight = 38;
         private const double ExpandedWidth = 416;
         private const double ExpandedHeight = 212;
-        private const int SlideCount = 5;
+        private const int SlideCount = 6;
 
         public static MainWindow PrimaryInstance { get; private set; }
         public static MainWindow CompanionInstance { get; private set; }
@@ -1695,9 +1704,11 @@ namespace Glance
         // Internet speed UI
         private TextBlock netDownText;
         private TextBlock netUpText;
+        private TextBlock collapsedNetDownText;
+        private TextBlock collapsedNetUpText;
 
         // Collapsed music mode (album art + live waveform, like iPhone)
-        private const double MusicCollapsedWidth = 196;
+        private const double MusicCollapsedWidth = 216;
         private Grid collapsedIdleLayout;
         private Grid collapsedMusicLayout;
         private Border collapsedArtBox;
@@ -1722,6 +1733,13 @@ namespace Glance
         private StackPanel clipListPanel;
         private TextBox noteInputBox;
         private StackPanel notesListPanel;
+
+        // Slide 5: Drop Shelf UI (File Staging Area)
+        private StackPanel shelfListPanel;
+        private TextBlock shelfCountText;
+        private string shelfFilePath;
+        private List<ShelfItem> shelfList = new List<ShelfItem>();
+        private static readonly Dictionary<string, ImageSource> fileIconCache = new Dictionary<string, ImageSource>(StringComparer.OrdinalIgnoreCase);
 
         // Timers & State
         private DispatcherTimer clockTimer;
@@ -1784,6 +1802,7 @@ namespace Glance
             }
             notesFilePath = System.IO.Path.Combine(dataDir, "notes.json");
             clipFilePath = System.IO.Path.Combine(dataDir, "clipboard.json");
+            shelfFilePath = System.IO.Path.Combine(dataDir, "shelf.json");
             configFilePath = System.IO.Path.Combine(dataDir, "config.json");
 
             if (!IsCompanionWindow)
@@ -1797,6 +1816,7 @@ namespace Glance
                 IsPinned = PrimaryInstance.IsPinned;
                 notesList = new List<NoteItem>(PrimaryInstance.notesList);
                 clipList = new List<ClipItem>(PrimaryInstance.clipList);
+                shelfList = new List<ShelfItem>(PrimaryInstance.shelfList);
             }
 
             Title = isCompanion ? "Glance (Companion)" : "Glance";
@@ -1974,6 +1994,8 @@ namespace Glance
                                 CompanionInstance.SetAlbumArtVisuals(curBmp);
                             }
                         }
+                        CompanionInstance.shelfList = new List<ShelfItem>(PrimaryInstance.shelfList);
+                        CompanionInstance.RenderShelfList();
                     }
                     else
                     {
@@ -2199,7 +2221,47 @@ namespace Glance
                 BorderThickness = new Thickness(0, 0, 0, 1),
                 CornerRadius = new CornerRadius(0, 0, 19, 19),
                 VerticalAlignment = VerticalAlignment.Top,
-                SnapsToDevicePixels = true
+                SnapsToDevicePixels = true,
+                AllowDrop = true
+            };
+
+            notchBody.DragEnter += (s, e) =>
+            {
+                if (e.Data.GetDataPresent(DataFormats.FileDrop))
+                {
+                    e.Effects = DragDropEffects.Copy;
+                    e.Handled = true;
+                    notchBody.BorderBrush = new SolidColorBrush(Color.FromRgb(28, 231, 85));
+                    notchBody.BorderThickness = new Thickness(1);
+                }
+            };
+            notchBody.DragOver += (s, e) =>
+            {
+                if (e.Data.GetDataPresent(DataFormats.FileDrop))
+                {
+                    e.Effects = DragDropEffects.Copy;
+                    e.Handled = true;
+                }
+            };
+            notchBody.DragLeave += (s, e) =>
+            {
+                notchBody.BorderBrush = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255));
+                notchBody.BorderThickness = new Thickness(0, 0, 0, 1);
+            };
+            notchBody.Drop += (s, e) =>
+            {
+                notchBody.BorderBrush = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255));
+                notchBody.BorderThickness = new Thickness(0, 0, 0, 1);
+                if (e.Data.GetDataPresent(DataFormats.FileDrop))
+                {
+                    string[] files = e.Data.GetData(DataFormats.FileDrop) as string[];
+                    if (files != null && files.Length > 0)
+                    {
+                        AddFilesToShelf(files);
+                        SwitchSlide(5);
+                        AnimateToExpanded();
+                    }
+                }
             };
 
             notchBody.MouseEnter += (s, e) =>
@@ -2238,37 +2300,75 @@ namespace Glance
         {
             Grid root = new Grid();
 
-            // ---- Idle layout: battery ring + clock (original look) ----
+            // ---- Idle layout: [Kiri: Baterai]  [Tengah: Jam]  [Kanan: Speed Wi-Fi (↓ / ↑)] ----
             collapsedIdleLayout = new Grid
             {
-                Margin = new Thickness(15, 0, 22, 2),
+                Margin = new Thickness(12, 0, 12, 2),
                 VerticalAlignment = VerticalAlignment.Stretch
             };
+            collapsedIdleLayout.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            collapsedIdleLayout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            collapsedIdleLayout.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
+            // 1. Kiri: Battery Ring Widget
             Grid batRing = CreateBatteryRingWidget(24, 3.3, out collapsedBatteryArc);
             batRing.HorizontalAlignment = HorizontalAlignment.Left;
             batRing.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetColumn(batRing, 0);
 
+            // 2. Tengah: Jam
             collapsedTimeText = new TextBlock
             {
-                Text = "11:53",
+                Text = "16:06",
                 Foreground = Brushes.White,
-                FontSize = 16,
+                FontSize = 15,
                 FontWeight = FontWeights.Bold,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(collapsedTimeText, 1);
+
+            // 3. Kanan: Speed wifi (download and upload)
+            StackPanel netSpeedPanel = new StackPanel
+            {
+                Orientation = Orientation.Vertical,
                 HorizontalAlignment = HorizontalAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Center
             };
+            collapsedNetDownText = new TextBlock
+            {
+                Text = "↓ 0 KB/s",
+                Foreground = new SolidColorBrush(Color.FromRgb(28, 231, 85)),
+                FontSize = 9.2,
+                FontWeight = FontWeights.SemiBold,
+                TextAlignment = TextAlignment.Right
+            };
+            collapsedNetUpText = new TextBlock
+            {
+                Text = "↑ 0 KB/s",
+                Foreground = new SolidColorBrush(Color.FromRgb(165, 165, 178)),
+                FontSize = 9.2,
+                FontWeight = FontWeights.SemiBold,
+                TextAlignment = TextAlignment.Right
+            };
+            netSpeedPanel.Children.Add(collapsedNetDownText);
+            netSpeedPanel.Children.Add(collapsedNetUpText);
+            Grid.SetColumn(netSpeedPanel, 2);
 
             collapsedIdleLayout.Children.Add(batRing);
             collapsedIdleLayout.Children.Add(collapsedTimeText);
+            collapsedIdleLayout.Children.Add(netSpeedPanel);
 
             // ---- Music layout: mini album art + clock + live waveform (like iPhone) ----
             collapsedMusicLayout = new Grid
             {
-                Margin = new Thickness(10, 0, 16, 2),
+                Margin = new Thickness(12, 0, 12, 2),
                 VerticalAlignment = VerticalAlignment.Stretch,
                 Visibility = Visibility.Collapsed
             };
+            collapsedMusicLayout.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            collapsedMusicLayout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            collapsedMusicLayout.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
             collapsedArtBox = new Border
             {
@@ -2291,16 +2391,18 @@ namespace Glance
                 VerticalAlignment = VerticalAlignment.Center
             };
             collapsedArtBox.Child = collapsedArtPlaceholder;
+            Grid.SetColumn(collapsedArtBox, 0);
 
             collapsedMusicTimeText = new TextBlock
             {
-                Text = "11:53",
+                Text = "16:06",
                 Foreground = Brushes.White,
                 FontSize = 15,
                 FontWeight = FontWeights.Bold,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
             };
+            Grid.SetColumn(collapsedMusicTimeText, 1);
 
             StackPanel wavePanel = new StackPanel
             {
@@ -2329,6 +2431,7 @@ namespace Glance
                 waveBars[i] = bar;
                 wavePanel.Children.Add(bar);
             }
+            Grid.SetColumn(wavePanel, 2);
 
             collapsedMusicLayout.Children.Add(collapsedArtBox);
             collapsedMusicLayout.Children.Add(collapsedMusicTimeText);
@@ -2507,6 +2610,7 @@ namespace Glance
             slidePanels[2] = BuildControlCenterSlide();
             slidePanels[3] = BuildClipboardSlide();
             slidePanels[4] = BuildNotesSlide();
+            slidePanels[5] = BuildShelfSlide();
 
             for (int i = 0; i < SlideCount; i++)
             {
@@ -2530,7 +2634,8 @@ namespace Glance
                 "Baterai, CPU, RAM & Disk (C: / D:)",
                 "Wi-Fi, Sound & Brightness",
                 "Riwayat Clipboard",
-                "Catatan Cepat"
+                "Catatan Cepat",
+                "File Shelf (Tampung & Drag File)"
             };
             for (int i = 0; i < SlideCount; i++)
             {
@@ -3353,6 +3458,366 @@ namespace Glance
             g.Children.Add(sv);
             RenderNotesList();
             return g;
+        }
+
+        // =======================================================
+        // SLIDE 5: DROP SHELF (FILE STAGING AREA)
+        // =======================================================
+        private Grid BuildShelfSlide()
+        {
+            Grid g = new Grid();
+            g.RowDefinitions.Add(new RowDefinition { Height = new GridLength(24) });
+            g.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+            DockPanel header = new DockPanel { Margin = new Thickness(0, 0, 0, 4) };
+
+            StackPanel titleSp = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            TextBlock title = new TextBlock
+            {
+                Text = "Drop Shelf (Penampung File)",
+                Foreground = new SolidColorBrush(Color.FromRgb(228, 228, 235)),
+                FontSize = 12,
+                FontWeight = FontWeights.Bold
+            };
+            shelfCountText = new TextBlock
+            {
+                Text = "",
+                Foreground = new SolidColorBrush(Color.FromRgb(28, 231, 85)),
+                FontSize = 11,
+                FontWeight = FontWeights.SemiBold,
+                Margin = new Thickness(6, 0, 0, 0)
+            };
+            titleSp.Children.Add(title);
+            titleSp.Children.Add(shelfCountText);
+
+            Border clearBtn = new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
+                CornerRadius = new CornerRadius(6),
+                Padding = new Thickness(8, 2, 8, 2),
+                Cursor = Cursors.Hand,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            TextBlock clearTxt = new TextBlock
+            {
+                Text = "Bersihkan",
+                Foreground = new SolidColorBrush(Color.FromRgb(210, 210, 220)),
+                FontSize = 10.5,
+                FontWeight = FontWeights.SemiBold
+            };
+            clearBtn.Child = clearTxt;
+            clearBtn.MouseLeftButtonUp += (s, e) =>
+            {
+                e.Handled = true;
+                shelfList.Clear();
+                SaveShelfData();
+                RenderShelfList();
+            };
+            DockPanel.SetDock(clearBtn, Dock.Right);
+            header.Children.Add(clearBtn);
+            header.Children.Add(titleSp);
+            Grid.SetRow(header, 0);
+
+            ScrollViewer sv = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Hidden };
+            shelfListPanel = new StackPanel();
+            sv.Content = shelfListPanel;
+            Grid.SetRow(sv, 1);
+
+            g.AllowDrop = true;
+            g.Drop += (s, e) =>
+            {
+                if (e.Data.GetDataPresent(DataFormats.FileDrop))
+                {
+                    string[] files = e.Data.GetData(DataFormats.FileDrop) as string[];
+                    AddFilesToShelf(files);
+                }
+            };
+
+            g.Children.Add(header);
+            g.Children.Add(sv);
+            RenderShelfList();
+            return g;
+        }
+
+        private void AddFilesToShelf(string[] filePaths)
+        {
+            if (filePaths == null || filePaths.Length == 0) return;
+            foreach (string path in filePaths)
+            {
+                if (string.IsNullOrWhiteSpace(path)) continue;
+                shelfList.RemoveAll(x => string.Equals(x.filePath, path, StringComparison.OrdinalIgnoreCase));
+
+                long size = 0;
+                try { if (File.Exists(path)) size = new FileInfo(path).Length; } catch { }
+
+                shelfList.Insert(0, new ShelfItem
+                {
+                    id = Guid.NewGuid().ToString("N"),
+                    filePath = path,
+                    fileName = System.IO.Path.GetFileName(path),
+                    fileSizeBytes = size,
+                    timeAdded = DateTime.Now.ToString("HH:mm")
+                });
+            }
+
+            if (shelfList.Count > 30) shelfList = shelfList.Take(30).ToList();
+            SaveShelfData();
+            RenderShelfList();
+        }
+
+        private void RenderShelfList()
+        {
+            if (shelfListPanel == null) return;
+            shelfListPanel.Children.Clear();
+
+            if (shelfCountText != null)
+            {
+                shelfCountText.Text = shelfList.Count > 0 ? string.Format("({0} file)", shelfList.Count) : "";
+            }
+
+            if (shelfList.Count == 0)
+            {
+                Border emptyZone = new Border
+                {
+                    Background = new SolidColorBrush(Color.FromArgb(15, 255, 255, 255)),
+                    BorderBrush = new SolidColorBrush(Color.FromArgb(45, 255, 255, 255)),
+                    BorderThickness = new Thickness(1),
+                    CornerRadius = new CornerRadius(10),
+                    Padding = new Thickness(14, 20, 14, 20),
+                    Margin = new Thickness(0, 10, 0, 0),
+                    Cursor = Cursors.Hand
+                };
+                StackPanel sp = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
+                TextBlock iconTb = new TextBlock
+                {
+                    Text = "📥",
+                    FontSize = 26,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    Margin = new Thickness(0, 0, 0, 6)
+                };
+                TextBlock t1 = new TextBlock
+                {
+                    Text = "Tarik & Lepas (Drag & Drop) file ke sini",
+                    Foreground = Brushes.White,
+                    FontSize = 12,
+                    FontWeight = FontWeights.SemiBold,
+                    HorizontalAlignment = HorizontalAlignment.Center
+                };
+                TextBlock t2 = new TextBlock
+                {
+                    Text = "File akan ditampung sementara untuk dipindahkan ke app lain",
+                    Foreground = new SolidColorBrush(Color.FromRgb(140, 140, 150)),
+                    FontSize = 10.5,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    Margin = new Thickness(0, 2, 0, 0)
+                };
+                sp.Children.Add(iconTb);
+                sp.Children.Add(t1);
+                sp.Children.Add(t2);
+                emptyZone.Child = sp;
+                shelfListPanel.Children.Add(emptyZone);
+                return;
+            }
+
+            foreach (var item in shelfList)
+            {
+                var curItem = item;
+                Border row = new Border
+                {
+                    Background = new SolidColorBrush(Color.FromArgb(20, 255, 255, 255)),
+                    BorderBrush = new SolidColorBrush(Color.FromArgb(42, 255, 255, 255)),
+                    BorderThickness = new Thickness(1),
+                    CornerRadius = new CornerRadius(8),
+                    Padding = new Thickness(8, 5, 8, 5),
+                    Margin = new Thickness(0, 0, 0, 5),
+                    Cursor = Cursors.Hand,
+                    ToolTip = curItem.filePath + "\n(Drag untuk pindahkan ke app lain)"
+                };
+
+                Grid rowGrid = new Grid();
+                rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) });
+                rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+                // Col 0: File Icon
+                Image iconImg = new Image
+                {
+                    Width = 18,
+                    Height = 18,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    HorizontalAlignment = HorizontalAlignment.Left
+                };
+                ImageSource src = GetFileIcon(curItem.filePath);
+                if (src != null)
+                {
+                    iconImg.Source = src;
+                }
+                Grid.SetColumn(iconImg, 0);
+
+                // Col 1: File Name & Size
+                StackPanel textSp = new StackPanel
+                {
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(4, 0, 6, 0)
+                };
+                TextBlock nameTb = new TextBlock
+                {
+                    Text = curItem.fileName,
+                    Foreground = Brushes.White,
+                    FontSize = 11.5,
+                    FontWeight = FontWeights.SemiBold,
+                    TextTrimming = TextTrimming.CharacterEllipsis
+                };
+                TextBlock sizeTb = new TextBlock
+                {
+                    Text = FormatFileSize(curItem.fileSizeBytes) + " • " + curItem.timeAdded,
+                    Foreground = new SolidColorBrush(Color.FromRgb(140, 140, 152)),
+                    FontSize = 10
+                };
+                textSp.Children.Add(nameTb);
+                textSp.Children.Add(sizeTb);
+                Grid.SetColumn(textSp, 1);
+
+                // Col 2: Action buttons (Copy path, Open folder, Delete)
+                StackPanel actSp = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+
+                TextBlock openBtn = new TextBlock
+                {
+                    Text = "📂",
+                    FontSize = 11,
+                    Foreground = new SolidColorBrush(Color.FromRgb(170, 170, 180)),
+                    Margin = new Thickness(0, 0, 8, 0),
+                    Cursor = Cursors.Hand,
+                    ToolTip = "Buka folder lokasi file"
+                };
+                openBtn.MouseLeftButtonUp += (s, ev) =>
+                {
+                    ev.Handled = true;
+                    try
+                    {
+                        if (File.Exists(curItem.filePath))
+                        {
+                            Process.Start("explorer.exe", "/select,\"" + curItem.filePath + "\"");
+                        }
+                    }
+                    catch { }
+                };
+
+                TextBlock delBtn = new TextBlock
+                {
+                    Text = "✕",
+                    FontSize = 11,
+                    Foreground = new SolidColorBrush(Color.FromRgb(160, 160, 170)),
+                    Cursor = Cursors.Hand,
+                    ToolTip = "Hapus dari Shelf"
+                };
+                delBtn.MouseLeftButtonUp += (s, ev) =>
+                {
+                    ev.Handled = true;
+                    shelfList.RemoveAll(x => x.id == curItem.id);
+                    SaveShelfData();
+                    RenderShelfList();
+                };
+
+                actSp.Children.Add(openBtn);
+                actSp.Children.Add(delBtn);
+                Grid.SetColumn(actSp, 2);
+
+                rowGrid.Children.Add(iconImg);
+                rowGrid.Children.Add(textSp);
+                rowGrid.Children.Add(actSp);
+                row.Child = rowGrid;
+
+                // DRAG OUT: Allow user to drag file out into any application / Explorer / browser
+                Point dragStartPoint = new Point(0, 0);
+                bool isRowMouseDown = false;
+
+                row.PreviewMouseLeftButtonDown += (s, ev) =>
+                {
+                    dragStartPoint = ev.GetPosition(null);
+                    isRowMouseDown = true;
+                };
+
+                row.PreviewMouseMove += (s, ev) =>
+                {
+                    if (isRowMouseDown && ev.LeftButton == MouseButtonState.Pressed)
+                    {
+                        Point currentPoint = ev.GetPosition(null);
+                        Vector diff = dragStartPoint - currentPoint;
+                        if (Math.Abs(diff.X) > 4 || Math.Abs(diff.Y) > 4)
+                        {
+                            isRowMouseDown = false;
+                            try
+                            {
+                                if (File.Exists(curItem.filePath))
+                                {
+                                    DataObject data = new DataObject(DataFormats.FileDrop, new string[] { curItem.filePath });
+                                    DragDrop.DoDragDrop(row, data, DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link);
+                                }
+                            }
+                            catch { }
+                        }
+                    }
+                };
+
+                row.PreviewMouseLeftButtonUp += (s, ev) =>
+                {
+                    isRowMouseDown = false;
+                };
+
+                shelfListPanel.Children.Add(row);
+            }
+        }
+
+        private static ImageSource GetFileIcon(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return null;
+            string ext = System.IO.Path.GetExtension(path) ?? "";
+            lock (fileIconCache)
+            {
+                if (fileIconCache.ContainsKey(ext)) return fileIconCache[ext];
+            }
+
+            try
+            {
+                if (File.Exists(path))
+                {
+                    using (var icon = System.Drawing.Icon.ExtractAssociatedIcon(path))
+                    {
+                        if (icon != null)
+                        {
+                            var bmp = Imaging.CreateBitmapSourceFromHIcon(
+                                icon.Handle,
+                                Int32Rect.Empty,
+                                BitmapSizeOptions.FromEmptyOptions()
+                            );
+                            bmp.Freeze();
+                            lock (fileIconCache)
+                            {
+                                fileIconCache[ext] = bmp;
+                            }
+                            return bmp;
+                        }
+                    }
+                }
+            }
+            catch { }
+            return null;
+        }
+
+        private string FormatFileSize(long bytes)
+        {
+            if (bytes < 1024) return bytes + " B";
+            double kb = bytes / 1024.0;
+            if (kb < 1024) return kb.ToString("F1", CultureInfo.InvariantCulture) + " KB";
+            double mb = kb / 1024.0;
+            if (mb < 1024) return mb.ToString("F1", CultureInfo.InvariantCulture) + " MB";
+            double gb = mb / 1024.0;
+            return gb.ToString("F2", CultureInfo.InvariantCulture) + " GB";
         }
 
         // =======================================================
@@ -4313,8 +4778,12 @@ namespace Glance
                 wifiSignalPill.Background = new SolidColorBrush(Color.FromArgb(45, 248, 113, 113));
             }
 
-            netDownText.Text = "↓ " + NetworkSpeedMonitor.Format(netDownBps);
-            netUpText.Text = "↑ " + NetworkSpeedMonitor.Format(netUpBps);
+            string downStr = "↓ " + NetworkSpeedMonitor.Format(netDownBps);
+            string upStr = "↑ " + NetworkSpeedMonitor.Format(netUpBps);
+            netDownText.Text = downStr;
+            netUpText.Text = upStr;
+            if (collapsedNetDownText != null) collapsedNetDownText.Text = downStr;
+            if (collapsedNetUpText != null) collapsedNetUpText.Text = upStr;
 
             soundIconText.Text = (isMuted || volPct == 0) ? "🔇" : (volPct < 50 ? "🔉" : "🔊");
             if (!isDraggingSound)
@@ -4408,6 +4877,15 @@ namespace Glance
                 }
             }
             catch { clipList = new List<ClipItem>(); }
+
+            try
+            {
+                if (File.Exists(shelfFilePath))
+                {
+                    shelfList = json.Deserialize<List<ShelfItem>>(File.ReadAllText(shelfFilePath, Encoding.UTF8)) ?? new List<ShelfItem>();
+                }
+            }
+            catch { shelfList = new List<ShelfItem>(); }
         }
 
         private void SaveNotesData()
@@ -4437,6 +4915,21 @@ namespace Glance
             {
                 PrimaryInstance.clipList = new List<ClipItem>(clipList);
                 PrimaryInstance.RenderClipboardList();
+            }
+        }
+
+        private void SaveShelfData()
+        {
+            try { File.WriteAllText(shelfFilePath, json.Serialize(shelfList.Take(30).ToList()), Encoding.UTF8); } catch { }
+            if (!IsCompanionWindow && CompanionInstance != null)
+            {
+                CompanionInstance.shelfList = new List<ShelfItem>(shelfList);
+                CompanionInstance.RenderShelfList();
+            }
+            else if (IsCompanionWindow && PrimaryInstance != null)
+            {
+                PrimaryInstance.shelfList = new List<ShelfItem>(shelfList);
+                PrimaryInstance.RenderShelfList();
             }
         }
 

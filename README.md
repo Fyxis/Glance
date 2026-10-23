@@ -20,8 +20,11 @@ Unlike heavy modern utilities wrapped in Electron or Chromium that devour hundre
 ## 🚀 Key Features
 
 ### 🏝️ 1. Dynamic Island HUD
-* **Ambient Top Notch**: Sits unobtrusively at the top-center of your monitor.
-* **Fluid Expansion**: Expands into an interactive multi-slide control hub on hover or click with custom cubic-bezier spring easing.
+* **Ambient Top Notch**: Sits unobtrusively at the top-center of your monitor with a balanced 3-column design:
+  - **Kiri**: Baterai (circular progress arc ring dengan indikator charging ⚡)
+  - **Tengah**: Jam (bold real-time clock)
+  - **Kanan**: Kecepatan Internet Wi-Fi (Download `↓` & Upload `↑` real-time)
+* **Fluid Expansion**: Expands into an interactive 6-slide control hub on hover or click with custom cubic-bezier spring easing.
 * **Translucent Frosted Glass**: Modern acrylic glass styling with customizable opacity slider in Settings (`⚙️`).
 * **Pin Mode**: Lock Glance in expanded view or let it auto-collapse gracefully when your mouse leaves.
 
@@ -59,6 +62,12 @@ Unlike heavy modern utilities wrapped in Electron or Chromium that devour hundre
 * **Kedua Layar (Both Screens)**: Run synchronized dynamic islands on both monitors simultaneously, sharing media playback, live waveform, and hardware telemetry with zero extra CPU/RAM overhead (~20 MB total).
 * **Cursor-Aware Glance Search**: `Ctrl + Shift + P` automatically detects which monitor your cursor is currently active on and launches centered on that display.
 * **Instant Switching**: Switch monitors on the fly anytime from Settings (`⚙️`) or the right-click System Tray menu.
+
+### 📥 9. Drop Shelf / File Staging Zone
+* **Drag-and-Drop ke Notch**: Tarik file apa saja (gambar, dokumen, zip, video) dari desktop atau File Explorer langsung ke notch atas. Notch akan menyala hijau dan menampung file secara instan.
+* **Drag OUT Langsung**: Klik dan seret (drag) file apa saja dari Shelf langsung ke WhatsApp Web, Telegram, Discord, email, browser upload form, atau folder lain.
+* **Quick File Actions**: Buka lokasi file di Windows Explorer (`📂`), salin path file, hapus per item (`✕`), dan tombol "Bersihkan Semua".
+* **Multi-Monitor Sync**: File di Shelf tersinkronisasi otomatis di monitor 1 dan monitor 2.
 
 ---
 
