@@ -78,6 +78,10 @@ namespace Glance
         public bool showSlideNotes { get; set; }
         public bool showSlideShelf { get; set; }
 
+        public uint hotkeyModifiers { get; set; }
+        public uint hotkeyKey { get; set; }
+        public string hotkeyDisplay { get; set; }
+
         public AppConfig()
         {
             backgroundAlpha = 175;
@@ -96,6 +100,10 @@ namespace Glance
             showSlideClipboard = true;
             showSlideNotes = true;
             showSlideShelf = true;
+
+            hotkeyModifiers = NativeMethods.MOD_CONTROL | NativeMethods.MOD_SHIFT;
+            hotkeyKey = NativeMethods.VK_P;
+            hotkeyDisplay = "Ctrl + Shift + P";
         }
     }
 
@@ -560,8 +568,10 @@ namespace Glance
         public const int GWL_EXSTYLE = -20;
         public const int WS_EX_TOOLWINDOW = 0x00000080;
         public const int WM_HOTKEY = 0x0312;
+        public const uint MOD_ALT = 0x0001;
         public const uint MOD_CONTROL = 0x0002;
         public const uint MOD_SHIFT = 0x0004;
+        public const uint MOD_WIN = 0x0008;
         public const uint MOD_NOREPEAT = 0x4000;
         public const uint VK_P = 0x50;
 
@@ -1428,6 +1438,15 @@ namespace Glance
         private CheckBox chkSlideNotes;
         private CheckBox chkSlideShelf;
 
+        // Hotkey Customization
+        private uint tempHotkeyModifiers;
+        private uint tempHotkeyKey;
+        private string tempHotkeyDisplay;
+        private Border shortcutKeyBadge;
+        private TextBlock shortcutKeyText;
+        private Button resetHotkeyBtn;
+        private bool isRecordingHotkey = false;
+
         // Tab Navigation
         private int currentSelectedTab = 0;
         private Border tabBtnGeneral;
@@ -1451,6 +1470,10 @@ namespace Glance
             Background = Brushes.Transparent;
             Topmost = true;
             Closed += (s, e) => MemoryOptimizer.TrimMemory(force: true);
+
+            tempHotkeyModifiers = parentIsland != null ? parentIsland.HotkeyModifiers : (NativeMethods.MOD_CONTROL | NativeMethods.MOD_SHIFT);
+            tempHotkeyKey = parentIsland != null ? parentIsland.HotkeyKey : NativeMethods.VK_P;
+            tempHotkeyDisplay = parentIsland != null && !string.IsNullOrEmpty(parentIsland.HotkeyDisplay) ? parentIsland.HotkeyDisplay : "Ctrl + Shift + P";
 
             tempColorAccent = parentIsland != null ? (parentIsland.ColorAccent ?? "#1CE755") : "#1CE755";
             tempColorBattery = parentIsland != null ? (parentIsland.ColorBattery ?? "#1CE755") : "#1CE755";
@@ -1817,18 +1840,207 @@ namespace Glance
             cardAlpha.Child = spAlpha;
             sp.Children.Add(cardAlpha);
 
-            TextBlock shortcutHint = new TextBlock
+            // Option 5: Customizable Global Shortcut for Glance Search
+            Border cardShortcut = CreateOptionCard();
+            StackPanel spShortcut = new StackPanel();
+
+            TextBlock lblShortcutTitle = new TextBlock
             {
-                Text = "💡 Press Ctrl + Shift + P anytime to open Glance Search (Spotlight App Launcher).",
-                Foreground = new SolidColorBrush(Color.FromRgb(165, 165, 178)),
-                FontSize = 11.5,
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(2, 4, 2, 8)
+                Text = "Glance Search Global Shortcut (Spotlight):",
+                Foreground = Brushes.White,
+                FontSize = 12.5,
+                FontWeight = FontWeights.SemiBold,
+                Margin = new Thickness(0, 0, 0, 4)
             };
-            sp.Children.Add(shortcutHint);
+            spShortcut.Children.Add(lblShortcutTitle);
+
+            TextBlock lblShortcutSub = new TextBlock
+            {
+                Text = "Click the box below, then press your desired key combination (Default: Ctrl + Shift + P):",
+                Foreground = new SolidColorBrush(Color.FromRgb(165, 165, 178)),
+                FontSize = 11,
+                Margin = new Thickness(0, 0, 0, 8),
+                TextWrapping = TextWrapping.Wrap
+            };
+            spShortcut.Children.Add(lblShortcutSub);
+
+            DockPanel dpShortcutRow = new DockPanel();
+
+            resetHotkeyBtn = new Button
+            {
+                Content = "Reset to Default",
+                Height = 32,
+                Padding = new Thickness(12, 0, 12, 0),
+                Background = new SolidColorBrush(Color.FromArgb(60, 255, 255, 255)),
+                Foreground = new SolidColorBrush(Color.FromRgb(220, 220, 230)),
+                FontSize = 11.5,
+                FontWeight = FontWeights.SemiBold,
+                BorderThickness = new Thickness(0),
+                Cursor = Cursors.Hand,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            resetHotkeyBtn.MouseEnter += (s, e) => resetHotkeyBtn.Background = new SolidColorBrush(Color.FromArgb(90, 255, 255, 255));
+            resetHotkeyBtn.MouseLeave += (s, e) => resetHotkeyBtn.Background = new SolidColorBrush(Color.FromArgb(60, 255, 255, 255));
+            DockPanel.SetDock(resetHotkeyBtn, Dock.Right);
+            dpShortcutRow.Children.Add(resetHotkeyBtn);
+
+            shortcutKeyBadge = new Border
+            {
+                Height = 32,
+                Background = new SolidColorBrush(Color.FromArgb(220, 22, 22, 30)),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(65, 65, 75)),
+                BorderThickness = new Thickness(1.2),
+                CornerRadius = new CornerRadius(7),
+                Padding = new Thickness(12, 0, 12, 0),
+                Cursor = Cursors.Hand,
+                Focusable = true,
+                Margin = new Thickness(0, 0, 8, 0)
+            };
+
+            shortcutKeyText = new TextBlock
+            {
+                Text = tempHotkeyDisplay,
+                Foreground = new SolidColorBrush(MainWindow.ColorFromHex(tempColorAccent, Color.FromRgb(28, 231, 85))),
+                FontSize = 12,
+                FontWeight = FontWeights.Bold,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            shortcutKeyBadge.Child = shortcutKeyText;
+            dpShortcutRow.Children.Add(shortcutKeyBadge);
+
+            Action startRecording = () =>
+            {
+                isRecordingHotkey = true;
+                shortcutKeyText.Text = "⌨️ Press keys now...";
+                shortcutKeyText.Foreground = new SolidColorBrush(Color.FromRgb(251, 191, 36));
+                Color acc = MainWindow.ColorFromHex(tempColorAccent, Color.FromRgb(28, 231, 85));
+                shortcutKeyBadge.BorderBrush = new SolidColorBrush(acc);
+                shortcutKeyBadge.Background = new SolidColorBrush(Color.FromArgb(240, 35, 35, 45));
+                shortcutKeyBadge.Focus();
+            };
+
+            Action stopRecording = () =>
+            {
+                isRecordingHotkey = false;
+                shortcutKeyText.Text = tempHotkeyDisplay;
+                Color acc = MainWindow.ColorFromHex(tempColorAccent, Color.FromRgb(28, 231, 85));
+                shortcutKeyText.Foreground = new SolidColorBrush(acc);
+                shortcutKeyBadge.BorderBrush = new SolidColorBrush(Color.FromRgb(65, 65, 75));
+                shortcutKeyBadge.Background = new SolidColorBrush(Color.FromArgb(220, 22, 22, 30));
+            };
+
+            shortcutKeyBadge.MouseLeftButtonDown += (s, e) =>
+            {
+                e.Handled = true;
+                if (!isRecordingHotkey) startRecording();
+                else stopRecording();
+            };
+
+            shortcutKeyBadge.LostFocus += (s, e) =>
+            {
+                if (isRecordingHotkey) stopRecording();
+            };
+
+            shortcutKeyBadge.PreviewKeyDown += (s, e) =>
+            {
+                if (!isRecordingHotkey) return;
+                e.Handled = true;
+
+                Key key = (e.Key == Key.System) ? e.SystemKey : e.Key;
+
+                if (key == Key.Escape)
+                {
+                    stopRecording();
+                    return;
+                }
+
+                if (key == Key.LeftCtrl || key == Key.RightCtrl ||
+                    key == Key.LeftAlt || key == Key.RightAlt ||
+                    key == Key.LeftShift || key == Key.RightShift ||
+                    key == Key.LWin || key == Key.RWin)
+                {
+                    return;
+                }
+
+                ModifierKeys mods = Keyboard.Modifiers;
+                uint win32Mods = 0;
+                List<string> parts = new List<string>();
+
+                if ((mods & ModifierKeys.Control) != 0)
+                {
+                    win32Mods |= NativeMethods.MOD_CONTROL;
+                    parts.Add("Ctrl");
+                }
+                if ((mods & ModifierKeys.Alt) != 0)
+                {
+                    win32Mods |= NativeMethods.MOD_ALT;
+                    parts.Add("Alt");
+                }
+                if ((mods & ModifierKeys.Shift) != 0)
+                {
+                    win32Mods |= NativeMethods.MOD_SHIFT;
+                    parts.Add("Shift");
+                }
+                if ((mods & ModifierKeys.Windows) != 0)
+                {
+                    win32Mods |= NativeMethods.MOD_WIN;
+                    parts.Add("Win");
+                }
+
+                if (win32Mods == 0)
+                {
+                    shortcutKeyText.Text = "Must include Ctrl, Alt, or Shift!";
+                    return;
+                }
+
+                string keyName = FormatKeyName(key);
+                parts.Add(keyName);
+
+                uint vk = (uint)KeyInterop.VirtualKeyFromKey(key);
+                tempHotkeyModifiers = win32Mods;
+                tempHotkeyKey = vk;
+                tempHotkeyDisplay = string.Join(" + ", parts);
+
+                stopRecording();
+            };
+
+            resetHotkeyBtn.Click += (s, e) =>
+            {
+                tempHotkeyModifiers = NativeMethods.MOD_CONTROL | NativeMethods.MOD_SHIFT;
+                tempHotkeyKey = NativeMethods.VK_P;
+                tempHotkeyDisplay = "Ctrl + Shift + P";
+                stopRecording();
+            };
+
+            spShortcut.Children.Add(dpShortcutRow);
+            cardShortcut.Child = spShortcut;
+            sp.Children.Add(cardShortcut);
 
             sv.Content = sp;
             return sv;
+        }
+
+        private static string FormatKeyName(Key key)
+        {
+            if (key >= Key.D0 && key <= Key.D9)
+            {
+                return ((int)key - (int)Key.D0).ToString();
+            }
+            if (key >= Key.NumPad0 && key <= Key.NumPad9)
+            {
+                return "Num " + ((int)key - (int)Key.NumPad0).ToString();
+            }
+            if (key == Key.Space) return "Space";
+            if (key == Key.Return) return "Enter";
+            if (key == Key.Tab) return "Tab";
+            if (key == Key.Back) return "Backspace";
+            if (key == Key.OemTilde) return "~";
+            if (key == Key.OemQuestion) return "/";
+            if (key == Key.OemPeriod) return ".";
+            if (key == Key.OemComma) return ",";
+            if (key == Key.OemPlus) return "+";
+            if (key == Key.OemMinus) return "-";
+            return key.ToString().ToUpperInvariant();
         }
 
         // =======================================================
@@ -2232,6 +2444,7 @@ namespace Glance
                 parentIsland.ShowSlideNotes = n;
                 parentIsland.ShowSlideShelf = sh;
 
+                parentIsland.UpdateGlobalHotkey(tempHotkeyModifiers, tempHotkeyKey, tempHotkeyDisplay);
                 parentIsland.ApplyCustomColors();
                 parentIsland.ApplySlideVisibilityConfig();
                 parentIsland.SaveAppConfig();
@@ -2305,10 +2518,17 @@ namespace Glance
         public bool ShowSlideNotes { get; set; }
         public bool ShowSlideShelf { get; set; }
 
+        // Customizable Hotkey
+        public uint HotkeyModifiers { get; set; }
+        public uint HotkeyKey { get; set; }
+        public string HotkeyDisplay { get; set; }
+
         private SolidColorBrush notchBgBrush;
         private static SpotlightWindow spotlightWin;
 
         // UI Elements
+        private Border searchQuickBtn;
+        private Forms.ToolStripMenuItem traySearchItem;
         private Border notchBody;
         private Grid collapsedView;
         private Grid expandedView;
@@ -2494,6 +2714,11 @@ namespace Glance
             ShowSlideClipboard = true;
             ShowSlideNotes = true;
             ShowSlideShelf = true;
+
+            HotkeyModifiers = NativeMethods.MOD_CONTROL | NativeMethods.MOD_SHIFT;
+            HotkeyKey = NativeMethods.VK_P;
+            HotkeyDisplay = "Ctrl + Shift + P";
+
             string oldDir = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WindowsDynamicIsland");
             dataDir = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Glance");
             Directory.CreateDirectory(dataDir);
@@ -2538,6 +2763,10 @@ namespace Glance
                 ShowSlideClipboard = PrimaryInstance.ShowSlideClipboard;
                 ShowSlideNotes = PrimaryInstance.ShowSlideNotes;
                 ShowSlideShelf = PrimaryInstance.ShowSlideShelf;
+
+                HotkeyModifiers = PrimaryInstance.HotkeyModifiers;
+                HotkeyKey = PrimaryInstance.HotkeyKey;
+                HotkeyDisplay = PrimaryInstance.HotkeyDisplay;
 
                 notesList = new List<NoteItem>(PrimaryInstance.notesList);
                 clipList = new List<ClipItem>(PrimaryInstance.clipList);
@@ -2668,7 +2897,11 @@ namespace Glance
                     showSlideControl = ShowSlideControl,
                     showSlideClipboard = ShowSlideClipboard,
                     showSlideNotes = ShowSlideNotes,
-                    showSlideShelf = ShowSlideShelf
+                    showSlideShelf = ShowSlideShelf,
+
+                    hotkeyModifiers = HotkeyModifiers,
+                    hotkeyKey = HotkeyKey,
+                    hotkeyDisplay = HotkeyDisplay
                 };
                 File.WriteAllText(configFilePath, json.Serialize(cfg), Encoding.UTF8);
             }
@@ -2831,18 +3064,13 @@ namespace Glance
 
                 if (!IsCompanionWindow)
                 {
-                    // Register Global Hotkey: Ctrl + Shift + P
+                    // Register Global Hotkey
                     HwndSource src = HwndSource.FromHwnd(hwnd);
                     if (src != null)
                     {
                         src.AddHook(WndProc);
                     }
-                    NativeMethods.RegisterHotKey(
-                        hwnd,
-                        HOTKEY_ID_SPOTLIGHT,
-                        NativeMethods.MOD_CONTROL | NativeMethods.MOD_SHIFT | NativeMethods.MOD_NOREPEAT,
-                        NativeMethods.VK_P
-                    );
+                    UpdateGlobalHotkey(HotkeyModifiers, HotkeyKey, HotkeyDisplay);
                     NativeMethods.AddClipboardFormatListener(hwnd);
 
                     clockTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1000) };
@@ -2867,8 +3095,8 @@ namespace Glance
                     };
                     startupTrimTimer2.Start();
 
-                    // Periodic background memory trimmer (every 10 seconds when collapsed/idle)
-                    var maintenanceTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10.0) };
+                    // Periodic background memory trimmer (every 6 seconds when collapsed/idle)
+                    var maintenanceTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(6.0) };
                     maintenanceTimer.Tick += (s, ev) =>
                     {
                         bool anyExpanded = isExpanded || (CompanionInstance != null && CompanionInstance.isExpanded);
@@ -2905,6 +3133,75 @@ namespace Glance
                 OnClipboardTick(null, null);
             }
             return IntPtr.Zero;
+        }
+
+        public void UpdateGlobalHotkey(uint modifiers, uint key, string display)
+        {
+            if (modifiers == 0 || key == 0)
+            {
+                modifiers = NativeMethods.MOD_CONTROL | NativeMethods.MOD_SHIFT;
+                key = NativeMethods.VK_P;
+                display = "Ctrl + Shift + P";
+            }
+
+            HotkeyModifiers = modifiers;
+            HotkeyKey = key;
+            HotkeyDisplay = string.IsNullOrWhiteSpace(display) ? "Ctrl + Shift + P" : display;
+
+            if (!IsCompanionWindow)
+            {
+                try
+                {
+                    IntPtr hwnd = new WindowInteropHelper(this).Handle;
+                    if (hwnd != IntPtr.Zero)
+                    {
+                        NativeMethods.UnregisterHotKey(hwnd, HOTKEY_ID_SPOTLIGHT);
+                        bool registered = NativeMethods.RegisterHotKey(
+                            hwnd,
+                            HOTKEY_ID_SPOTLIGHT,
+                            HotkeyModifiers | NativeMethods.MOD_NOREPEAT,
+                            HotkeyKey
+                        );
+
+                        if (!registered)
+                        {
+                            // If custom combination failed (e.g. system conflict), fall back to default Ctrl + Shift + P
+                            HotkeyModifiers = NativeMethods.MOD_CONTROL | NativeMethods.MOD_SHIFT;
+                            HotkeyKey = NativeMethods.VK_P;
+                            HotkeyDisplay = "Ctrl + Shift + P";
+                            NativeMethods.RegisterHotKey(
+                                hwnd,
+                                HOTKEY_ID_SPOTLIGHT,
+                                HotkeyModifiers | NativeMethods.MOD_NOREPEAT,
+                                HotkeyKey
+                            );
+                        }
+                    }
+                }
+                catch { }
+
+                UpdateHotkeyTooltips();
+            }
+
+            if (CompanionInstance != null)
+            {
+                CompanionInstance.HotkeyModifiers = HotkeyModifiers;
+                CompanionInstance.HotkeyKey = HotkeyKey;
+                CompanionInstance.HotkeyDisplay = HotkeyDisplay;
+                CompanionInstance.UpdateHotkeyTooltips();
+            }
+        }
+
+        public void UpdateHotkeyTooltips()
+        {
+            if (searchQuickBtn != null)
+            {
+                searchQuickBtn.ToolTip = "Glance Search (" + HotkeyDisplay + ")";
+            }
+            if (traySearchItem != null)
+            {
+                traySearchItem.Text = "Glance Search (" + HotkeyDisplay + ")";
+            }
         }
 
         public void ToggleSpotlightSearch()
@@ -3240,8 +3537,8 @@ namespace Glance
                 Margin = new Thickness(14, 6, 14, 0)
             };
 
-            // Top-Left Search Button (Quick trigger for Ctrl + Shift + P Spotlight Search)
-            Border searchQuickBtn = new Border
+            // Top-Left Search Button (Quick trigger for Spotlight Search)
+            searchQuickBtn = new Border
             {
                 Width = 22,
                 Height = 22,
@@ -3250,7 +3547,7 @@ namespace Glance
                 HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Center,
                 Cursor = Cursors.Hand,
-                ToolTip = "Glance Search (Ctrl + Shift + P)"
+                ToolTip = "Glance Search (" + HotkeyDisplay + ")"
             };
             TextBlock searchQuickIcon = new TextBlock
             {
@@ -6082,6 +6379,13 @@ namespace Glance
                         ShowSlideClipboard = cfg.showSlideClipboard;
                         ShowSlideNotes = cfg.showSlideNotes;
                         ShowSlideShelf = cfg.showSlideShelf;
+
+                        if (cfg.hotkeyModifiers != 0 && cfg.hotkeyKey != 0)
+                        {
+                            HotkeyModifiers = cfg.hotkeyModifiers;
+                            HotkeyKey = cfg.hotkeyKey;
+                            HotkeyDisplay = !string.IsNullOrEmpty(cfg.hotkeyDisplay) ? cfg.hotkeyDisplay : "Ctrl + Shift + P";
+                        }
                     }
                 }
             }
@@ -6098,7 +6402,7 @@ namespace Glance
                     notesList.Add(new NoteItem
                     {
                         id = "n1",
-                        text = "Selamat datang di Glance! Tekan Ctrl+Shift+P untuk Glance Search.",
+                        text = "Welcome to Glance! Press " + HotkeyDisplay + " to launch Glance Search.",
                         done = false
                     });
                     SaveNotesData();
@@ -6399,7 +6703,8 @@ namespace Glance
             trayIcon.Visible = true;
 
             Forms.ContextMenuStrip menu = new Forms.ContextMenuStrip();
-            menu.Items.Add("Glance Search (Ctrl+Shift+P)", null, (s, e) => Dispatcher.Invoke(ToggleSpotlightSearch));
+            traySearchItem = new Forms.ToolStripMenuItem("Glance Search (" + HotkeyDisplay + ")", null, (s, e) => Dispatcher.Invoke(ToggleSpotlightSearch));
+            menu.Items.Add(traySearchItem);
             menu.Items.Add("Glance Settings...", null, (s, e) => Dispatcher.Invoke(OpenSettingsDialog));
 
             int screenCount = Forms.Screen.AllScreens.Length;
