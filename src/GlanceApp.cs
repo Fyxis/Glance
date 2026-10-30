@@ -618,6 +618,25 @@ namespace Glance
         public const uint MOD_WIN = 0x0008;
         public const uint MOD_NOREPEAT = 0x4000;
         public const uint VK_P = 0x50;
+        public const int VK_SHIFT = 0x10;
+        public const int WM_MOUSEHWHEEL = 0x020E;
+
+        [DllImport("user32.dll")]
+        public static extern short GetAsyncKeyState(int vKey);
+
+        public static bool IsShiftDown()
+        {
+            try
+            {
+                bool win32 = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+                bool wpf = (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift;
+                return win32 || wpf;
+            }
+            catch
+            {
+                return (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift;
+            }
+        }
 
         [DllImport("user32.dll")]
         public static extern int GetWindowLong(IntPtr hWnd, int nIndex);
@@ -2700,6 +2719,7 @@ namespace Glance
         private volatile bool isExpanded = false;
         private bool isInputFocused = false;
         private int currentSlide = 0;
+        private long lastSlideScrollTick = 0;
 
         // Customizable Area Colors
         public string ColorAccent { get; set; }
@@ -3006,6 +3026,7 @@ namespace Glance
             }
 
             BuildUI();
+            PreviewMouseWheel += OnWindowPreviewMouseWheel;
 
             if (!IsCompanionWindow)
             {
@@ -3330,6 +3351,28 @@ namespace Glance
             }
         }
 
+        private void OnWindowPreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            if (isExpanded && NativeMethods.IsShiftDown())
+            {
+                e.Handled = true;
+                long now = Environment.TickCount64;
+                if (now - lastSlideScrollTick >= 160)
+                {
+                    if (e.Delta < 0)
+                    {
+                        SwitchSlide(currentSlide + 1);
+                        lastSlideScrollTick = now;
+                    }
+                    else if (e.Delta > 0)
+                    {
+                        SwitchSlide(currentSlide - 1);
+                        lastSlideScrollTick = now;
+                    }
+                }
+            }
+        }
+
         private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
         {
             if (msg == NativeMethods.WM_HOTKEY && wParam.ToInt32() == HOTKEY_ID_SPOTLIGHT)
@@ -3341,6 +3384,26 @@ namespace Glance
             {
                 handled = true;
                 OnClipboardTick(null, null);
+            }
+            else if (msg == NativeMethods.WM_MOUSEHWHEEL && isExpanded)
+            {
+                short delta = (short)((wParam.ToInt64() >> 16) & 0xFFFF);
+                long now = Environment.TickCount64;
+                if (now - lastSlideScrollTick >= 160)
+                {
+                    if (delta > 0)
+                    {
+                        SwitchSlide(currentSlide + 1);
+                        lastSlideScrollTick = now;
+                        handled = true;
+                    }
+                    else if (delta < 0)
+                    {
+                        SwitchSlide(currentSlide - 1);
+                        lastSlideScrollTick = now;
+                        handled = true;
+                    }
+                }
             }
             return IntPtr.Zero;
         }
@@ -3984,6 +4047,16 @@ namespace Glance
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Bottom,
                 Margin = new Thickness(0, 0, 0, 9)
+            };
+            dotsPanel.PreviewMouseWheel += (s, e) =>
+            {
+                e.Handled = true;
+                long now = Environment.TickCount64;
+                if (now - lastSlideScrollTick >= 160)
+                {
+                    if (e.Delta < 0) { SwitchSlide(currentSlide + 1); lastSlideScrollTick = now; }
+                    else if (e.Delta > 0) { SwitchSlide(currentSlide - 1); lastSlideScrollTick = now; }
+                }
             };
             g.Children.Add(dotsPanel);
 
@@ -5509,7 +5582,7 @@ namespace Glance
                 CornerRadius = new CornerRadius(11),
                 Background = new SolidColorBrush(Color.FromArgb(75, 255, 255, 255)),
                 Cursor = Cursors.Hand,
-                ToolTip = isLeft ? "Previous Slide" : "Next Slide"
+                ToolTip = isLeft ? "Previous Slide (Shift + Scroll Up)" : "Next Slide (Shift + Scroll Down)"
             };
             Path arrow = new Path
             {
@@ -5775,7 +5848,15 @@ namespace Glance
             {
                 if (slidePanels[i] != null)
                 {
-                    slidePanels[i].Visibility = (i == targetSlide) ? Visibility.Visible : Visibility.Collapsed;
+                    if (i == targetSlide)
+                    {
+                        slidePanels[i].Visibility = Visibility.Visible;
+                        slidePanels[i].BeginAnimation(OpacityProperty, new DoubleAnimation(0.3, 1.0, TimeSpan.FromMilliseconds(130)));
+                    }
+                    else
+                    {
+                        slidePanels[i].Visibility = Visibility.Collapsed;
+                    }
                 }
             }
 
