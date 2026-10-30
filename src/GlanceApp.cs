@@ -83,15 +83,15 @@ namespace Glance
         {
             return new List<DockCustomItem>
             {
-                new DockCustomItem { Title = "Start", TargetPath = "start:", ProcessMatch = "StartMenuExperienceHost", IconType = "start" },
-                new DockCustomItem { Title = "Search", TargetPath = "glance:search", ProcessMatch = "Glance|SearchApp", IconType = "search" },
-                new DockCustomItem { Title = "Task View", TargetPath = "taskview:", ProcessMatch = "TaskView", IconType = "taskview" },
+                new DockCustomItem { Title = "Start", TargetPath = "start:", ProcessMatch = "", IconType = "start" },
+                new DockCustomItem { Title = "Search", TargetPath = "glance:search", ProcessMatch = "", IconType = "search" },
+                new DockCustomItem { Title = "Task View", TargetPath = "taskview:", ProcessMatch = "", IconType = "taskview" },
                 new DockCustomItem { Title = "File Explorer", TargetPath = "explorer.exe", ProcessMatch = "explorer", IconType = "explorer" },
-                new DockCustomItem { Title = "Microsoft Edge", TargetPath = "microsoft-edge:", ProcessMatch = "msedge|chrome|firefox|brave", IconType = "browser" },
+                new DockCustomItem { Title = "Microsoft Edge", TargetPath = "microsoft-edge:", ProcessMatch = "msedge", IconType = "browser" },
                 new DockCustomItem { Title = "Spotify", TargetPath = "spotify:", ProcessMatch = "Spotify", IconType = "spotify" },
                 new DockCustomItem { Title = "Microsoft Store", TargetPath = "ms-windows-store:", ProcessMatch = "WinStore.App", IconType = "store" },
-                new DockCustomItem { Title = "Terminal", TargetPath = "wt.exe", ProcessMatch = "WindowsTerminal|powershell|cmd", IconType = "terminal" },
-                new DockCustomItem { Title = "Snipping Tool", TargetPath = "ms-screenclip:", ProcessMatch = "SnippingTool|ScreenClippingHost", IconType = "snipping" },
+                new DockCustomItem { Title = "Terminal", TargetPath = "wt.exe", ProcessMatch = "WindowsTerminal", IconType = "terminal" },
+                new DockCustomItem { Title = "Snipping Tool", TargetPath = "ms-screenclip:", ProcessMatch = "SnippingTool", IconType = "snipping" },
                 new DockCustomItem { Title = "Photos", TargetPath = "ms-photos:", ProcessMatch = "Microsoft.Photos", IconType = "photos" },
                 new DockCustomItem { Title = "Settings", TargetPath = "glance:settings", ProcessMatch = "SystemSettings", IconType = "settings" },
                 new DockCustomItem { IsSeparator = true },
@@ -726,6 +726,30 @@ namespace Glance
 
         [DllImport("user32.dll")]
         public static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+
+        public const int WS_EX_APPWINDOW = 0x00040000;
+        public const int DWMWA_CLOAKED = 14;
+
+        public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool IsWindowVisible(IntPtr hWnd);
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        public static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+
+        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+        public static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
+
+        [DllImport("user32.dll")]
+        public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+        [DllImport("dwmapi.dll")]
+        public static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out int pvAttribute, int cbAttribute);
 
         [DllImport("user32.dll", SetLastError = true)]
         public static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
@@ -1586,6 +1610,7 @@ namespace Glance
         private TextBlock tooltipText;
         private List<DockItemControl> dockControls = new List<DockItemControl>();
         private DispatcherTimer runningCheckTimer;
+        private const double BasePillHeight = 64.0;
 
         public MacDockWindow(MainWindow owner = null)
         {
@@ -1598,7 +1623,7 @@ namespace Glance
             ShowInTaskbar = false;
             ResizeMode = ResizeMode.NoResize;
             SnapsToDevicePixels = true;
-            Height = 125;
+            Height = 135;
             Width = 760;
 
             BuildDockUI();
@@ -1655,7 +1680,7 @@ namespace Glance
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Bottom,
                 Margin = new Thickness(0, 0, 0, 8),
-                Height = 64,
+                Height = BasePillHeight,
                 CornerRadius = new CornerRadius(20),
                 Background = new SolidColorBrush(Color.FromArgb(170, 24, 25, 30)),
                 BorderBrush = new SolidColorBrush(Color.FromArgb(70, 255, 255, 255)),
@@ -1675,7 +1700,7 @@ namespace Glance
             {
                 Orientation = Orientation.Horizontal,
                 VerticalAlignment = VerticalAlignment.Bottom,
-                Margin = new Thickness(12, 0, 12, 6),
+                Margin = new Thickness(14, 0, 14, 5),
                 ClipToBounds = false
             };
 
@@ -1711,12 +1736,12 @@ namespace Glance
             }
 
             // Dynamic Dock Width based on count of items
-            double calculatedWidth = 28.0;
+            double calculatedWidth = 32.0;
             foreach (var it in list)
             {
-                calculatedWidth += it.IsSeparator ? 16.0 : 56.0;
+                calculatedWidth += it.IsSeparator ? 16.0 : 54.0;
             }
-            Width = Math.Max(420, calculatedWidth + 40);
+            Width = Math.Max(420, calculatedWidth + 50);
 
             Reposition();
             CheckRunningApps();
@@ -1730,13 +1755,13 @@ namespace Glance
                 Title = item.Title,
                 OnClick = () => DockIconHelper.LaunchDockItem(item, parentWindow),
                 ProcessNameMatch = item.ProcessMatch,
-                Width = 52,
-                Height = 62,
+                Width = 50,
+                Height = 58,
                 Margin = new Thickness(2, 0, 2, 0),
                 ClipToBounds = false
             };
 
-            ctrl.RowDefinitions.Add(new RowDefinition { Height = new GridLength(48) });
+            ctrl.RowDefinitions.Add(new RowDefinition { Height = new GridLength(46) });
             ctrl.RowDefinitions.Add(new RowDefinition { Height = new GridLength(8) });
 
             ctrl.ScaleTrans = new ScaleTransform(1.0, 1.0);
@@ -1747,8 +1772,8 @@ namespace Glance
 
             ctrl.IconBorder = new Border
             {
-                Width = 46,
-                Height = 46,
+                Width = 42,
+                Height = 42,
                 CornerRadius = new CornerRadius(8),
                 Background = Brushes.Transparent,
                 Cursor = Cursors.Hand,
@@ -1805,14 +1830,14 @@ namespace Glance
                 ItemModel = item,
                 IsSeparator = true,
                 Width = 14,
-                Height = 62,
+                Height = 58,
                 Margin = new Thickness(2, 0, 2, 0)
             };
 
             Border line = new Border
             {
                 Width = 1,
-                Height = 34,
+                Height = 32,
                 Background = new SolidColorBrush(Color.FromArgb(50, 255, 255, 255)),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -1916,16 +1941,23 @@ namespace Glance
         {
             Point mousePos = e.GetPosition(itemsPanel);
             double mouseX = mousePos.X;
-            double maxScale = 1.55;
-            double radius = 125.0;
+            double maxScale = 1.38;
+            double radius = 115.0;
 
             DockItemControl closestItem = null;
             double minDistance = double.MaxValue;
+            double highestScale = 1.0;
+
+            dockPill.BeginAnimation(FrameworkElement.HeightProperty, null);
 
             for (int i = 0; i < dockControls.Count; i++)
             {
                 var ctrl = dockControls[i];
                 if (ctrl.IsSeparator) continue;
+
+                ctrl.ScaleTrans.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+                ctrl.ScaleTrans.BeginAnimation(ScaleTransform.ScaleYProperty, null);
+                ctrl.TranslateTrans.BeginAnimation(TranslateTransform.YProperty, null);
 
                 Point itemOrigin = ctrl.TransformToAncestor(itemsPanel).Transform(new Point(ctrl.ActualWidth / 2.0, 0));
                 double dist = Math.Abs(mouseX - itemOrigin.X);
@@ -1940,11 +1972,13 @@ namespace Glance
                 {
                     double factor = Math.Cos((dist / radius) * (Math.PI / 2.0));
                     double scale = 1.0 + (maxScale - 1.0) * factor * factor;
-                    double translateY = -(scale - 1.0) * 26.0;
+                    double translateY = -(scale - 1.0) * 1.5;
 
                     ctrl.ScaleTrans.ScaleX = scale;
                     ctrl.ScaleTrans.ScaleY = scale;
                     ctrl.TranslateTrans.Y = translateY;
+
+                    if (scale > highestScale) highestScale = scale;
                 }
                 else
                 {
@@ -1953,6 +1987,10 @@ namespace Glance
                     ctrl.TranslateTrans.Y = 0.0;
                 }
             }
+
+            // Dynamically expand dock pill height to wrap around magnified icons so they never cross top border
+            double targetHeight = BasePillHeight + (highestScale - 1.0) * 52.0;
+            dockPill.Height = targetHeight;
 
             if (closestItem != null && minDistance < 46.0)
             {
@@ -1969,6 +2007,9 @@ namespace Glance
             HideTooltip();
             var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
             var dur = TimeSpan.FromMilliseconds(160);
+
+            // Animate pill height back to base
+            dockPill.BeginAnimation(FrameworkElement.HeightProperty, new DoubleAnimation(BasePillHeight, dur) { EasingFunction = ease });
 
             foreach (var ctrl in dockControls)
             {
@@ -1990,10 +2031,14 @@ namespace Glance
             tooltipText.Text = item.Title;
             tooltipBorder.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
             double tipW = tooltipBorder.DesiredSize.Width;
+            double tipH = tooltipBorder.DesiredSize.Height;
 
             Point pos = item.TransformToAncestor(this).Transform(new Point(item.ActualWidth / 2.0, 0));
             double targetX = pos.X - (tipW / 2.0);
-            double targetY = pos.Y + item.TranslateTrans.Y - 26.0;
+
+            // Position tooltip floating right above current top border of pill
+            double pillTopY = Height - 8.0 - dockPill.Height;
+            double targetY = pillTopY - tipH - 6.0;
 
             Canvas.SetLeft(tooltipBorder, Math.Max(4, Math.Min(Width - tipW - 4, targetX)));
             Canvas.SetTop(tooltipBorder, Math.Max(2, targetY));
@@ -2010,9 +2055,9 @@ namespace Glance
             double curY = item.TranslateTrans.Y;
             var bounceAnim = new DoubleAnimationUsingKeyFrames();
             bounceAnim.KeyFrames.Add(new LinearDoubleKeyFrame(curY, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(0))));
-            bounceAnim.KeyFrames.Add(new SplineDoubleKeyFrame(curY - 22, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(80))));
+            bounceAnim.KeyFrames.Add(new SplineDoubleKeyFrame(curY - 18, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(80))));
             bounceAnim.KeyFrames.Add(new SplineDoubleKeyFrame(curY, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(160))));
-            bounceAnim.KeyFrames.Add(new SplineDoubleKeyFrame(curY - 11, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(230))));
+            bounceAnim.KeyFrames.Add(new SplineDoubleKeyFrame(curY - 9, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(230))));
             bounceAnim.KeyFrames.Add(new SplineDoubleKeyFrame(curY, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(300))));
             bounceAnim.Completed += (s, e) => onComplete?.Invoke();
             item.TranslateTrans.BeginAnimation(TranslateTransform.YProperty, bounceAnim);
@@ -2040,14 +2085,14 @@ namespace Glance
                 double screenT = bounds.Top / dpiScaleY;
 
                 Left = screenL + (screenW - Width) / 2.0;
-                Top = screenT + screenH - Height - 4.0;
+                Top = screenT + screenH - Height - 2.0;
             }
             catch { }
         }
 
         private void StartRunningAppCheckTimer()
         {
-            runningCheckTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2.5) };
+            runningCheckTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1.5) };
             runningCheckTimer.Tick += (s, e) => CheckRunningApps();
             runningCheckTimer.Start();
             CheckRunningApps();
@@ -2059,29 +2104,98 @@ namespace Glance
             {
                 try
                 {
-                    var procs = Process.GetProcesses();
-                    HashSet<string> runningSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                    foreach (var p in procs)
+                    HashSet<string> openWindowProcesses = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    bool explorerHasFolderOpen = false;
+
+                    NativeMethods.EnumWindows((hWnd, lParam) =>
                     {
-                        try { runningSet.Add(p.ProcessName); } catch { }
-                    }
+                        try
+                        {
+                            if (!NativeMethods.IsWindowVisible(hWnd)) return true;
+
+                            int cloaked = 0;
+                            NativeMethods.DwmGetWindowAttribute(hWnd, NativeMethods.DWMWA_CLOAKED, out cloaked, sizeof(int));
+                            if (cloaked != 0) return true;
+
+                            int exStyle = NativeMethods.GetWindowLong(hWnd, NativeMethods.GWL_EXSTYLE);
+                            if ((exStyle & NativeMethods.WS_EX_TOOLWINDOW) != 0 && (exStyle & NativeMethods.WS_EX_APPWINDOW) == 0)
+                                return true;
+
+                            StringBuilder sbTitle = new StringBuilder(512);
+                            NativeMethods.GetWindowText(hWnd, sbTitle, 512);
+                            string title = sbTitle.ToString().Trim();
+                            if (string.IsNullOrEmpty(title)) return true;
+
+                            StringBuilder sbClass = new StringBuilder(256);
+                            NativeMethods.GetClassName(hWnd, sbClass, 256);
+                            string cls = sbClass.ToString();
+
+                            // Skip desktop surfaces & Glance itself
+                            if (cls == "Progman" || cls == "WorkerW" || cls == "Shell_TrayWnd" || cls == "Shell_SecondaryTrayWnd")
+                                return true;
+
+                            // Check if this is an Explorer folder window
+                            if (cls.Equals("CabinetWClass", StringComparison.OrdinalIgnoreCase))
+                            {
+                                explorerHasFolderOpen = true;
+                                return true;
+                            }
+
+                            uint pid;
+                            NativeMethods.GetWindowThreadProcessId(hWnd, out pid);
+                            if (pid != 0)
+                            {
+                                try
+                                {
+                                    var proc = Process.GetProcessById((int)pid);
+                                    string procName = proc.ProcessName;
+
+                                    if (!procName.Equals("explorer", StringComparison.OrdinalIgnoreCase) &&
+                                        !procName.Equals("Glance", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        openWindowProcesses.Add(procName);
+                                    }
+                                }
+                                catch { }
+                            }
+                        }
+                        catch { }
+
+                        return true;
+                    }, IntPtr.Zero);
 
                     Dispatcher.Invoke(() =>
                     {
                         foreach (var ctrl in dockControls)
                         {
-                            if (ctrl.IsSeparator || string.IsNullOrEmpty(ctrl.ProcessNameMatch)) continue;
+                            if (ctrl.IsSeparator || string.IsNullOrEmpty(ctrl.ProcessNameMatch))
+                            {
+                                ctrl.RunningDot.Visibility = Visibility.Hidden;
+                                continue;
+                            }
+
                             bool isRunning = false;
                             string[] targets = ctrl.ProcessNameMatch.Split('|');
                             foreach (var t in targets)
                             {
                                 string trimmed = t.Trim();
-                                if (!string.IsNullOrEmpty(trimmed) && runningSet.Contains(trimmed))
+                                if (string.IsNullOrEmpty(trimmed)) continue;
+
+                                if (trimmed.Equals("explorer", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    if (explorerHasFolderOpen)
+                                    {
+                                        isRunning = true;
+                                        break;
+                                    }
+                                }
+                                else if (openWindowProcesses.Contains(trimmed))
                                 {
                                     isRunning = true;
                                     break;
                                 }
                             }
+
                             ctrl.RunningDot.Visibility = isRunning ? Visibility.Visible : Visibility.Hidden;
                         }
                     });
@@ -3549,11 +3663,11 @@ namespace Glance
             wpPresets.Children.Add(CreatePresetChip("🟢 Spotify", () => ApplyPreset("Spotify", "spotify:", "Spotify", "spotify")));
             wpPresets.Children.Add(CreatePresetChip("🎵 Music Player", () => ApplyPreset("Spotify", "spotify:", "Spotify", "music")));
             wpPresets.Children.Add(CreatePresetChip("📁 Explorer", () => ApplyPreset("File Explorer", "explorer.exe", "explorer", "explorer")));
-            wpPresets.Children.Add(CreatePresetChip("🌐 Edge", () => ApplyPreset("Microsoft Edge", "microsoft-edge:", "msedge|chrome", "browser")));
-            wpPresets.Children.Add(CreatePresetChip("💻 Terminal", () => ApplyPreset("Terminal", "wt.exe", "WindowsTerminal|powershell|cmd", "terminal")));
+            wpPresets.Children.Add(CreatePresetChip("🌐 Edge", () => ApplyPreset("Microsoft Edge", "microsoft-edge:", "msedge", "browser")));
+            wpPresets.Children.Add(CreatePresetChip("💻 Terminal", () => ApplyPreset("Terminal", "wt.exe", "WindowsTerminal", "terminal")));
             wpPresets.Children.Add(CreatePresetChip("📝 Notepad", () => ApplyPreset("Notepad", "notepad.exe", "notepad", "notes")));
             wpPresets.Children.Add(CreatePresetChip("🧮 Calculator", () => ApplyPreset("Calculator", "calc.exe", "CalculatorApp|Calculator", "calc")));
-            wpPresets.Children.Add(CreatePresetChip("🎮 Steam", () => ApplyPreset("Steam", "steam:", "steam|steamwebhelper", "game")));
+            wpPresets.Children.Add(CreatePresetChip("🎮 Steam", () => ApplyPreset("Steam", "steam:", "steam", "game")));
             wpPresets.Children.Add(CreatePresetChip("💬 Discord", () => ApplyPreset("Discord", "discord:", "Discord", "chat")));
             wpPresets.Children.Add(CreatePresetChip("✂ Snipping", () => ApplyPreset("Snipping Tool", "ms-screenclip:", "SnippingTool", "snipping")));
             wpPresets.Children.Add(CreatePresetChip("📂 Browse .exe...", () => BrowseForExecutablePreset()));
@@ -10135,6 +10249,28 @@ namespace Glance
                         if (cfg.dockItems != null && cfg.dockItems.Count > 0)
                         {
                             DockItems = cfg.dockItems;
+                            foreach (var it in DockItems)
+                            {
+                                if (it == null) continue;
+                                string t = (it.Title ?? "").ToLowerInvariant();
+                                string ic = (it.IconType ?? "").ToLowerInvariant();
+                                if (t == "start" || ic == "start" || t == "search" || ic == "search" || t == "task view" || ic == "taskview" || t == "recycle bin" || ic == "recyclebin")
+                                {
+                                    it.ProcessMatch = "";
+                                }
+                                else if (!string.IsNullOrEmpty(it.ProcessMatch))
+                                {
+                                    if (it.ProcessMatch.Contains("ScreenClippingHost")) it.ProcessMatch = "SnippingTool";
+                                    if (it.ProcessMatch.Contains("powershell") || it.ProcessMatch.Contains("cmd")) it.ProcessMatch = "WindowsTerminal";
+                                    if (it.ProcessMatch.Contains("msedge|chrome"))
+                                    {
+                                        if (t.Contains("chrome") || (it.TargetPath ?? "").ToLowerInvariant().Contains("chrome"))
+                                            it.ProcessMatch = "chrome";
+                                        else
+                                            it.ProcessMatch = "msedge";
+                                    }
+                                }
+                            }
                         }
                         else
                         {
