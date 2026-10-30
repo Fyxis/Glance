@@ -172,6 +172,10 @@ namespace Glance
         public bool isSearchEnabled { get; set; } = true;
         public bool isDockInstalled { get; set; } = true;
         public bool isDockEnabled { get; set; } = true;
+        public bool dockAutoHideFullscreen { get; set; } = true;
+        public uint dockHotkeyModifiers { get; set; }
+        public uint dockHotkeyKey { get; set; }
+        public string dockHotkeyDisplay { get; set; }
         public List<DockCustomItem> dockItems { get; set; } = new List<DockCustomItem>();
 
         public AppConfig()
@@ -196,6 +200,11 @@ namespace Glance
             hotkeyModifiers = NativeMethods.MOD_CONTROL | NativeMethods.MOD_SHIFT;
             hotkeyKey = NativeMethods.VK_P;
             hotkeyDisplay = "Ctrl + Shift + P";
+
+            dockAutoHideFullscreen = true;
+            dockHotkeyModifiers = NativeMethods.MOD_ALT;
+            dockHotkeyKey = 0xC0;
+            dockHotkeyDisplay = "Alt + `";
 
             isSearchInstalled = true;
             isSearchEnabled = true;
@@ -884,6 +893,73 @@ namespace Glance
                     SetForegroundWindow(hWnd);
                 }
                 catch { }
+            }
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct RECT
+        {
+            public int Left;
+            public int Top;
+            public int Right;
+            public int Bottom;
+        }
+
+        [DllImport("user32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+
+        public const int GWL_STYLE = -16;
+        public const uint WS_CAPTION = 0x00C00000;
+
+        public static bool IsForegroundWindowFullscreen(Forms.Screen targetScreen, IntPtr ignore1 = default, IntPtr ignore2 = default)
+        {
+            try
+            {
+                IntPtr fg = GetForegroundWindow();
+                if (fg == IntPtr.Zero) return false;
+                if (fg == ignore1 || fg == ignore2) return false;
+
+                if (!IsWindowVisible(fg) || IsIconic(fg)) return false;
+
+                int cloaked = 0;
+                DwmGetWindowAttribute(fg, DWMWA_CLOAKED, out cloaked, sizeof(int));
+                if (cloaked != 0) return false;
+
+                StringBuilder sbClass = new StringBuilder(256);
+                GetClassName(fg, sbClass, 256);
+                string cls = sbClass.ToString();
+
+                if (cls == "Progman" || cls == "WorkerW" || cls == "Shell_TrayWnd" || cls == "Shell_SecondaryTrayWnd" ||
+                    cls == "Windows.UI.Core.CoreWindow" || cls == "XamlExplorerHostIslandWindow" ||
+                    cls == "TopLevelWindowForOverflowXamlIsland")
+                    return false;
+
+                if (!GetWindowRect(fg, out RECT rect)) return false;
+
+                Forms.Screen screen = targetScreen ?? Forms.Screen.FromHandle(fg) ?? Forms.Screen.PrimaryScreen;
+                if (screen == null) return false;
+
+                var b = screen.Bounds;
+
+                bool coversScreen = rect.Left <= b.Left &&
+                                    rect.Top <= b.Top &&
+                                    rect.Right >= b.Right &&
+                                    rect.Bottom >= b.Bottom;
+
+                if (!coversScreen) return false;
+
+                int style = GetWindowLong(fg, GWL_STYLE);
+                if ((style & (int)WS_CAPTION) == (int)WS_CAPTION)
+                {
+                    return false;
+                }
+
+                return true;
+            }
+            catch
+            {
+                return false;
             }
         }
     }
@@ -1697,6 +1773,8 @@ namespace Glance
         private TextBlock tooltipText;
         private List<DockItemControl> dockControls = new List<DockItemControl>();
         private DispatcherTimer runningCheckTimer;
+        private DispatcherTimer fullscreenCheckTimer;
+        public bool IsAutoHiddenForFullscreen { get; private set; } = false;
         private const double BasePillHeight = 64.0;
 
         public MacDockWindow(MainWindow owner = null)
@@ -1727,11 +1805,13 @@ namespace Glance
 
                 Reposition();
                 StartRunningAppCheckTimer();
+                StartFullscreenCheckTimer();
             };
 
             Closed += (s, e) =>
             {
                 if (runningCheckTimer != null) runningCheckTimer.Stop();
+                if (fullscreenCheckTimer != null) fullscreenCheckTimer.Stop();
             };
         }
 
@@ -2040,6 +2120,21 @@ namespace Glance
             };
             cm.Items.Add(mRemove);
 
+            cm.Items.Add(new Separator { Background = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)) });
+
+            MenuItem mHide = new MenuItem
+            {
+                Header = $"👁️  Hide Taskbar ({parentWindow?.DockHotkeyDisplay ?? "Alt + `"})",
+                Foreground = Brushes.White,
+                Padding = new Thickness(8, 5, 12, 5),
+                Cursor = Cursors.Hand
+            };
+            mHide.Click += (s, e) =>
+            {
+                parentWindow?.ToggleDock();
+            };
+            cm.Items.Add(mHide);
+
             ctrl.ContextMenu = cm;
             cm.IsOpen = true;
         }
@@ -2203,6 +2298,99 @@ namespace Glance
             runningCheckTimer.Tick += (s, e) => CheckRunningApps();
             runningCheckTimer.Start();
             CheckRunningApps();
+        }
+
+        private void StartFullscreenCheckTimer()
+        {
+            fullscreenCheckTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
+            fullscreenCheckTimer.Tick += (s, e) => CheckFullscreenState();
+            fullscreenCheckTimer.Start();
+        }
+
+        private void CheckFullscreenState()
+        {
+            if (parentWindow != null && (!parentWindow.IsDockInstalled || !parentWindow.IsDockEnabled))
+            {
+                return;
+            }
+
+            if (parentWindow != null && !parentWindow.DockAutoHideFullscreen)
+            {
+                if (IsAutoHiddenForFullscreen)
+                {
+                    IsAutoHiddenForFullscreen = false;
+                    ShowDockFromFullscreen();
+                }
+                return;
+            }
+
+            try
+            {
+                IntPtr dockHwnd = new WindowInteropHelper(this).Handle;
+                IntPtr notchHwnd = parentWindow != null ? new WindowInteropHelper(parentWindow).Handle : IntPtr.Zero;
+
+                bool isFs = NativeMethods.IsForegroundWindowFullscreen(parentWindow?.TargetScreen, dockHwnd, notchHwnd);
+
+                if (isFs)
+                {
+                    if (!IsAutoHiddenForFullscreen && this.Visibility == Visibility.Visible)
+                    {
+                        IsAutoHiddenForFullscreen = true;
+                        HideDockForFullscreen();
+                    }
+                }
+                else
+                {
+                    if (IsAutoHiddenForFullscreen)
+                    {
+                        IsAutoHiddenForFullscreen = false;
+                        ShowDockFromFullscreen();
+                    }
+                }
+            }
+            catch { }
+        }
+
+        public void HideDockForFullscreen()
+        {
+            try
+            {
+                DoubleAnimation fadeAnim = new DoubleAnimation(0.0, TimeSpan.FromMilliseconds(180));
+                fadeAnim.Completed += (s, e) =>
+                {
+                    if (IsAutoHiddenForFullscreen)
+                    {
+                        this.Visibility = Visibility.Hidden;
+                    }
+                };
+                dockPill.BeginAnimation(UIElement.OpacityProperty, fadeAnim);
+            }
+            catch
+            {
+                this.Visibility = Visibility.Hidden;
+            }
+        }
+
+        public void ShowDockFromFullscreen()
+        {
+            try
+            {
+                this.Visibility = Visibility.Visible;
+                dockPill.Opacity = 0.0;
+                DoubleAnimation fadeAnim = new DoubleAnimation(1.0, TimeSpan.FromMilliseconds(200));
+                dockPill.BeginAnimation(UIElement.OpacityProperty, fadeAnim);
+            }
+            catch
+            {
+                this.Visibility = Visibility.Visible;
+                dockPill.Opacity = 1.0;
+            }
+        }
+
+        public void ResumeFromFullscreenHide()
+        {
+            IsAutoHiddenForFullscreen = false;
+            ShowDockFromFullscreen();
         }
 
         private void CheckRunningApps()
@@ -4455,9 +4643,18 @@ namespace Glance
         // macOS Dynamic Dock Customization
         private bool tempIsDockInstalled;
         private bool tempIsDockEnabled;
+        private bool tempDockAutoHideFullscreen;
+        private uint tempDockHotkeyModifiers;
+        private uint tempDockHotkeyKey;
+        private string tempDockHotkeyDisplay;
+        private Border dockShortcutKeyBadge;
+        private TextBlock dockShortcutKeyText;
+        private Button resetDockHotkeyBtn;
+        private bool isRecordingDockHotkey = false;
         private Border cardDock;
         private StackPanel spDockBody;
         private CheckBox chkEnableDock;
+        private CheckBox chkDockAutoHideFullscreen;
 
         // Tab Navigation
         private int currentSelectedTab = 0;
@@ -4490,6 +4687,10 @@ namespace Glance
             tempIsSearchEnabled = parentIsland != null ? parentIsland.IsSearchEnabled : true;
             tempIsDockInstalled = parentIsland != null ? parentIsland.IsDockInstalled : true;
             tempIsDockEnabled = parentIsland != null ? parentIsland.IsDockEnabled : true;
+            tempDockAutoHideFullscreen = parentIsland != null ? parentIsland.DockAutoHideFullscreen : true;
+            tempDockHotkeyModifiers = parentIsland != null ? parentIsland.DockHotkeyModifiers : NativeMethods.MOD_ALT;
+            tempDockHotkeyKey = parentIsland != null ? parentIsland.DockHotkeyKey : 0xC0;
+            tempDockHotkeyDisplay = parentIsland != null && !string.IsNullOrEmpty(parentIsland.DockHotkeyDisplay) ? parentIsland.DockHotkeyDisplay : "Alt + `";
             tempHotkeyModifiers = parentIsland != null ? parentIsland.HotkeyModifiers : (NativeMethods.MOD_CONTROL | NativeMethods.MOD_SHIFT);
             tempHotkeyKey = parentIsland != null ? parentIsland.HotkeyKey : NativeMethods.VK_P;
             tempHotkeyDisplay = parentIsland != null && !string.IsNullOrEmpty(parentIsland.HotkeyDisplay) ? parentIsland.HotkeyDisplay : "Ctrl + Shift + P";
@@ -5208,7 +5409,8 @@ namespace Glance
             if (key == Key.Return) return "Enter";
             if (key == Key.Tab) return "Tab";
             if (key == Key.Back) return "Backspace";
-            if (key == Key.OemTilde) return "~";
+            if (key == Key.OemTilde || (int)key == 146) return "`";
+            if (key == Key.OemQuotes) return "'";
             if (key == Key.OemQuestion) return "/";
             if (key == Key.OemPeriod) return ".";
             if (key == Key.OemComma) return ",";
@@ -5352,9 +5554,177 @@ namespace Glance
                 Cursor = Cursors.Hand
             };
 
+            chkDockAutoHideFullscreen = new CheckBox
+            {
+                Content = "Auto-hide Taskbar when full screen (YouTube, Netflix, games)",
+                IsChecked = tempDockAutoHideFullscreen,
+                Foreground = new SolidColorBrush(Color.FromRgb(220, 220, 230)),
+                FontSize = 11.5,
+                FontWeight = FontWeights.Medium,
+                Margin = new Thickness(0, 0, 0, 10),
+                Cursor = Cursors.Hand
+            };
+            chkDockAutoHideFullscreen.Click += (s, e) =>
+            {
+                tempDockAutoHideFullscreen = chkDockAutoHideFullscreen.IsChecked == true;
+            };
+
+            // Global Shortcut Box for Dock Show / Hide
+            Border dockShortcutBox = new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(100, 20, 20, 26)),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(45, 45, 52)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(8),
+                Padding = new Thickness(10, 8, 10, 8),
+                Margin = new Thickness(0, 0, 0, 10)
+            };
+
+            StackPanel spDockShortcutInner = new StackPanel();
+            TextBlock lblDockShortcutHeader = new TextBlock
+            {
+                Text = "Show / Hide Taskbar Global Shortcut:",
+                Foreground = new SolidColorBrush(Color.FromRgb(200, 200, 210)),
+                FontSize = 11.5,
+                FontWeight = FontWeights.SemiBold,
+                Margin = new Thickness(0, 0, 0, 6)
+            };
+            spDockShortcutInner.Children.Add(lblDockShortcutHeader);
+
+            DockPanel dpDockShortcutRow = new DockPanel();
+
+            resetDockHotkeyBtn = new Button
+            {
+                Content = "Reset to Alt + `",
+                Height = 28,
+                Padding = new Thickness(10, 0, 10, 0),
+                Background = new SolidColorBrush(Color.FromArgb(60, 255, 255, 255)),
+                Foreground = Brushes.White,
+                FontSize = 10.5,
+                FontWeight = FontWeights.SemiBold,
+                BorderThickness = new Thickness(0),
+                Cursor = Cursors.Hand,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            DockPanel.SetDock(resetDockHotkeyBtn, Dock.Right);
+            dpDockShortcutRow.Children.Add(resetDockHotkeyBtn);
+
+            dockShortcutKeyBadge = new Border
+            {
+                Height = 30,
+                Background = new SolidColorBrush(Color.FromArgb(220, 22, 22, 30)),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(65, 65, 75)),
+                BorderThickness = new Thickness(1.2),
+                CornerRadius = new CornerRadius(6),
+                Padding = new Thickness(10, 0, 10, 0),
+                Cursor = Cursors.Hand,
+                Focusable = true,
+                Margin = new Thickness(0, 0, 8, 0)
+            };
+
+            dockShortcutKeyText = new TextBlock
+            {
+                Text = tempDockHotkeyDisplay,
+                Foreground = new SolidColorBrush(MainWindow.ColorFromHex(tempColorAccent, Color.FromRgb(28, 231, 85))),
+                FontSize = 11.5,
+                FontWeight = FontWeights.Bold,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            dockShortcutKeyBadge.Child = dockShortcutKeyText;
+            dpDockShortcutRow.Children.Add(dockShortcutKeyBadge);
+
+            Action startRecordingDock = () =>
+            {
+                if (!tempIsDockEnabled) return;
+                isRecordingDockHotkey = true;
+                dockShortcutKeyText.Text = "⌨️ Press keys now...";
+                dockShortcutKeyText.Foreground = new SolidColorBrush(Color.FromRgb(251, 191, 36));
+                Color acc = MainWindow.ColorFromHex(tempColorAccent, Color.FromRgb(28, 231, 85));
+                dockShortcutKeyBadge.BorderBrush = new SolidColorBrush(acc);
+                dockShortcutKeyBadge.Background = new SolidColorBrush(Color.FromArgb(240, 35, 35, 45));
+                dockShortcutKeyBadge.Focus();
+            };
+
+            Action stopRecordingDock = () =>
+            {
+                isRecordingDockHotkey = false;
+                dockShortcutKeyText.Text = tempDockHotkeyDisplay;
+                Color acc = MainWindow.ColorFromHex(tempColorAccent, Color.FromRgb(28, 231, 85));
+                dockShortcutKeyText.Foreground = new SolidColorBrush(acc);
+                dockShortcutKeyBadge.BorderBrush = new SolidColorBrush(Color.FromRgb(65, 65, 75));
+                dockShortcutKeyBadge.Background = new SolidColorBrush(Color.FromArgb(220, 22, 22, 30));
+            };
+
+            dockShortcutKeyBadge.MouseLeftButtonDown += (s, e) =>
+            {
+                e.Handled = true;
+                if (!isRecordingDockHotkey) startRecordingDock();
+                else stopRecordingDock();
+            };
+
+            dockShortcutKeyBadge.LostFocus += (s, e) =>
+            {
+                if (isRecordingDockHotkey) stopRecordingDock();
+            };
+
+            dockShortcutKeyBadge.PreviewKeyDown += (s, e) =>
+            {
+                if (!isRecordingDockHotkey) return;
+                e.Handled = true;
+
+                Key key = (e.Key == Key.System) ? e.SystemKey : e.Key;
+                if (key == Key.Escape) { stopRecordingDock(); return; }
+                if (key == Key.LeftCtrl || key == Key.RightCtrl || key == Key.LeftAlt || key == Key.RightAlt ||
+                    key == Key.LeftShift || key == Key.RightShift || key == Key.LWin || key == Key.RWin) return;
+
+                ModifierKeys mods = Keyboard.Modifiers;
+                uint win32Mods = 0;
+                List<string> parts = new List<string>();
+                if ((mods & ModifierKeys.Control) != 0) { win32Mods |= NativeMethods.MOD_CONTROL; parts.Add("Ctrl"); }
+                if ((mods & ModifierKeys.Alt) != 0) { win32Mods |= NativeMethods.MOD_ALT; parts.Add("Alt"); }
+                if ((mods & ModifierKeys.Shift) != 0) { win32Mods |= NativeMethods.MOD_SHIFT; parts.Add("Shift"); }
+                if ((mods & ModifierKeys.Windows) != 0) { win32Mods |= NativeMethods.MOD_WIN; parts.Add("Win"); }
+
+                if (win32Mods == 0)
+                {
+                    dockShortcutKeyText.Text = "Must include Ctrl, Alt, or Shift!";
+                    return;
+                }
+
+                string keyName = FormatKeyName(key);
+                parts.Add(keyName);
+                tempDockHotkeyModifiers = win32Mods;
+                tempDockHotkeyKey = (uint)KeyInterop.VirtualKeyFromKey(key);
+                tempDockHotkeyDisplay = string.Join(" + ", parts);
+                stopRecordingDock();
+            };
+
+            resetDockHotkeyBtn.Click += (s, e) =>
+            {
+                tempDockHotkeyModifiers = NativeMethods.MOD_ALT;
+                tempDockHotkeyKey = 0xC0; // VK_OEM_3 (` ~)
+                tempDockHotkeyDisplay = "Alt + `";
+                stopRecordingDock();
+            };
+
+            spDockShortcutInner.Children.Add(dpDockShortcutRow);
+            dockShortcutBox.Child = spDockShortcutInner;
+
+            Action updateDockControlStates = () =>
+            {
+                bool on = chkEnableDock.IsChecked == true;
+                chkDockAutoHideFullscreen.IsEnabled = on;
+                chkDockAutoHideFullscreen.Opacity = on ? 1.0 : 0.38;
+                dockShortcutBox.IsEnabled = on;
+                dockShortcutBox.Opacity = on ? 1.0 : 0.38;
+                if (!on && isRecordingDockHotkey) stopRecordingDock();
+            };
+
             chkEnableDock.Click += (s, e) =>
             {
                 tempIsDockEnabled = chkEnableDock.IsChecked == true;
+                updateDockControlStates();
+
                 if (tempIsDockEnabled)
                 {
                     Color acc = MainWindow.ColorFromHex(tempColorAccent, Color.FromRgb(28, 231, 85));
@@ -5373,6 +5743,9 @@ namespace Glance
             };
 
             spDockBody.Children.Add(chkEnableDock);
+            spDockBody.Children.Add(chkDockAutoHideFullscreen);
+            spDockBody.Children.Add(dockShortcutBox);
+            updateDockControlStates();
 
             // Button to open Dock Customizer Dialog
             Button btnCustomizeDock = new Button
@@ -5839,6 +6212,8 @@ namespace Glance
 
                 parentIsland.ApplySearchConfig(tempIsSearchInstalled, tempIsSearchEnabled);
                 parentIsland.ApplyDockConfig(tempIsDockInstalled, tempIsDockEnabled);
+                parentIsland.DockAutoHideFullscreen = tempDockAutoHideFullscreen;
+                parentIsland.UpdateDockGlobalHotkey(tempDockHotkeyModifiers, tempDockHotkeyKey, tempDockHotkeyDisplay);
                 parentIsland.UpdateGlobalHotkey(tempHotkeyModifiers, tempHotkeyKey, tempHotkeyDisplay);
                 parentIsland.ApplyCustomColors();
                 parentIsland.ApplySlideVisibilityConfig();
@@ -5865,6 +6240,7 @@ namespace Glance
     public class MainWindow : Window
     {
         private const int HOTKEY_ID_SPOTLIGHT = 9001;
+        private const int HOTKEY_ID_DOCK = 9002;
         private const double CollapsedWidth = 216;
         private const double CollapsedHeight = 36;
         private const double ExpandedWidth = 426;
@@ -5922,6 +6298,10 @@ namespace Glance
         public bool IsSearchEnabled { get; set; } = true;
         public bool IsDockInstalled { get; set; } = true;
         public bool IsDockEnabled { get; set; } = true;
+        public bool DockAutoHideFullscreen { get; set; } = true;
+        public uint DockHotkeyModifiers { get; set; } = NativeMethods.MOD_ALT;
+        public uint DockHotkeyKey { get; set; } = 0xC0;
+        public string DockHotkeyDisplay { get; set; } = "Alt + `";
         public List<DockCustomItem> DockItems { get; set; } = new List<DockCustomItem>();
 
         private SolidColorBrush notchBgBrush;
@@ -6257,6 +6637,7 @@ namespace Glance
                     {
                         IntPtr hwnd = new WindowInteropHelper(this).Handle;
                         NativeMethods.UnregisterHotKey(hwnd, HOTKEY_ID_SPOTLIGHT);
+                        NativeMethods.UnregisterHotKey(hwnd, HOTKEY_ID_DOCK);
                         NativeMethods.RemoveClipboardFormatListener(hwnd);
                     }
                     catch { }
@@ -6349,6 +6730,10 @@ namespace Glance
                     isSearchEnabled = IsSearchEnabled,
                     isDockInstalled = IsDockInstalled,
                     isDockEnabled = IsDockEnabled,
+                    dockAutoHideFullscreen = DockAutoHideFullscreen,
+                    dockHotkeyModifiers = DockHotkeyModifiers,
+                    dockHotkeyKey = DockHotkeyKey,
+                    dockHotkeyDisplay = DockHotkeyDisplay,
                     dockItems = DockItems
                 };
                 File.WriteAllText(configFilePath, json.Serialize(cfg), Encoding.UTF8);
@@ -6523,6 +6908,7 @@ namespace Glance
                         src.AddHook(WndProc);
                     }
                     UpdateGlobalHotkey(HotkeyModifiers, HotkeyKey, HotkeyDisplay);
+                    UpdateDockGlobalHotkey(DockHotkeyModifiers, DockHotkeyKey, DockHotkeyDisplay);
                     ApplySearchConfig(IsSearchInstalled, IsSearchEnabled);
                     ApplyDockConfig(IsDockInstalled, IsDockEnabled);
                     NativeMethods.AddClipboardFormatListener(hwnd);
@@ -6598,10 +6984,19 @@ namespace Glance
 
         private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
         {
-            if (msg == NativeMethods.WM_HOTKEY && wParam.ToInt32() == HOTKEY_ID_SPOTLIGHT)
+            if (msg == NativeMethods.WM_HOTKEY)
             {
-                handled = true;
-                ToggleSpotlightSearch();
+                int id = wParam.ToInt32();
+                if (id == HOTKEY_ID_SPOTLIGHT)
+                {
+                    handled = true;
+                    ToggleSpotlightSearch();
+                }
+                else if (id == HOTKEY_ID_DOCK)
+                {
+                    handled = true;
+                    ToggleDockVisibility();
+                }
             }
             else if (msg == NativeMethods.WM_CLIPBOARDUPDATE)
             {
@@ -6696,6 +7091,7 @@ namespace Glance
             {
                 trayDockItem.Visible = IsDockInstalled;
                 trayDockItem.Checked = active;
+                trayDockItem.Text = "macOS Dynamic Dock (" + DockHotkeyDisplay + ")";
             }
 
             if (!IsCompanionWindow)
@@ -6707,6 +7103,7 @@ namespace Glance
                         dockWin = new MacDockWindow(this);
                     }
                     dockWin.ReloadItems(DockItems);
+                    dockWin.ShowDockFromFullscreen();
                     if (!dockWin.IsVisible)
                     {
                         dockWin.Show();
@@ -6726,6 +7123,10 @@ namespace Glance
             {
                 CompanionInstance.IsDockInstalled = isInstalled;
                 CompanionInstance.IsDockEnabled = isEnabled;
+                CompanionInstance.DockAutoHideFullscreen = DockAutoHideFullscreen;
+                CompanionInstance.DockHotkeyModifiers = DockHotkeyModifiers;
+                CompanionInstance.DockHotkeyKey = DockHotkeyKey;
+                CompanionInstance.DockHotkeyDisplay = DockHotkeyDisplay;
                 CompanionInstance.DockItems = DockItems;
             }
         }
@@ -6735,6 +7136,89 @@ namespace Glance
             if (!IsDockInstalled) return;
             ApplyDockConfig(IsDockInstalled, !IsDockEnabled);
             SaveAppConfig();
+        }
+
+        public void ToggleDockVisibility()
+        {
+            if (!IsDockInstalled) return;
+
+            if (dockWin != null && dockWin.IsAutoHiddenForFullscreen)
+            {
+                dockWin.ResumeFromFullscreenHide();
+                return;
+            }
+
+            ToggleDock();
+        }
+
+        public void UpdateDockGlobalHotkey(uint modifiers, uint key, string display)
+        {
+            if (modifiers == 0 || key == 0)
+            {
+                modifiers = NativeMethods.MOD_ALT;
+                key = 0xC0; // VK_OEM_3 (` ~)
+                display = "Alt + `";
+            }
+
+            DockHotkeyModifiers = modifiers;
+            DockHotkeyKey = key;
+            DockHotkeyDisplay = string.IsNullOrWhiteSpace(display) ? "Alt + `" : display;
+
+            bool active = IsDockInstalled;
+
+            if (!IsCompanionWindow)
+            {
+                try
+                {
+                    IntPtr hwnd = new WindowInteropHelper(this).Handle;
+                    if (hwnd != IntPtr.Zero)
+                    {
+                        NativeMethods.UnregisterHotKey(hwnd, HOTKEY_ID_DOCK);
+                        if (active)
+                        {
+                            bool registered = NativeMethods.RegisterHotKey(
+                                hwnd,
+                                HOTKEY_ID_DOCK,
+                                DockHotkeyModifiers | NativeMethods.MOD_NOREPEAT,
+                                DockHotkeyKey
+                            );
+
+                            if (!registered)
+                            {
+                                DockHotkeyModifiers = NativeMethods.MOD_ALT;
+                                DockHotkeyKey = 0xC0;
+                                DockHotkeyDisplay = "Alt + `";
+                                NativeMethods.RegisterHotKey(
+                                    hwnd,
+                                    HOTKEY_ID_DOCK,
+                                    DockHotkeyModifiers | NativeMethods.MOD_NOREPEAT,
+                                    DockHotkeyKey
+                                );
+                            }
+                        }
+                    }
+                }
+                catch { }
+
+                UpdateDockHotkeyTooltips();
+            }
+
+            if (CompanionInstance != null)
+            {
+                CompanionInstance.DockHotkeyModifiers = DockHotkeyModifiers;
+                CompanionInstance.DockHotkeyKey = DockHotkeyKey;
+                CompanionInstance.DockHotkeyDisplay = DockHotkeyDisplay;
+                CompanionInstance.DockAutoHideFullscreen = DockAutoHideFullscreen;
+                CompanionInstance.UpdateDockHotkeyTooltips();
+            }
+        }
+
+        public void UpdateDockHotkeyTooltips()
+        {
+            if (trayDockItem != null)
+            {
+                trayDockItem.Text = "macOS Dynamic Dock (" + DockHotkeyDisplay + ")";
+            }
         }
 
         public void OpenDockCustomizer(DockCustomItem targetItemToEdit = null, bool isNew = false)
@@ -10547,6 +11031,20 @@ namespace Glance
                         IsSearchEnabled = cfg.isSearchEnabled;
                         IsDockInstalled = cfg.isDockInstalled;
                         IsDockEnabled = cfg.isDockEnabled;
+                        DockAutoHideFullscreen = cfg.dockAutoHideFullscreen;
+
+                        if (cfg.dockHotkeyModifiers != 0 && cfg.dockHotkeyKey != 0)
+                        {
+                            DockHotkeyModifiers = cfg.dockHotkeyModifiers;
+                            DockHotkeyKey = cfg.dockHotkeyKey;
+                            DockHotkeyDisplay = !string.IsNullOrEmpty(cfg.dockHotkeyDisplay) ? cfg.dockHotkeyDisplay : "Alt + `";
+                        }
+                        else
+                        {
+                            DockHotkeyModifiers = NativeMethods.MOD_ALT;
+                            DockHotkeyKey = 0xC0;
+                            DockHotkeyDisplay = "Alt + `";
+                        }
                         if (cfg.dockItems != null && cfg.dockItems.Count > 0)
                         {
                             DockItems = cfg.dockItems;
@@ -10898,7 +11396,7 @@ namespace Glance
             traySearchItem.Visible = (IsSearchInstalled && IsSearchEnabled);
             menu.Items.Add(traySearchItem);
 
-            trayDockItem = new Forms.ToolStripMenuItem("macOS Dynamic Dock", null, (s, e) => Dispatcher.Invoke(ToggleDock));
+            trayDockItem = new Forms.ToolStripMenuItem("macOS Dynamic Dock (" + DockHotkeyDisplay + ")", null, (s, e) => Dispatcher.Invoke(ToggleDock));
             trayDockItem.Visible = IsDockInstalled;
             trayDockItem.Checked = (IsDockInstalled && IsDockEnabled);
             menu.Items.Add(trayDockItem);
