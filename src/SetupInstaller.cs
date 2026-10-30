@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -6,6 +7,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.ComTypes;
 using System.Text;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -60,6 +62,7 @@ namespace GlanceSetup
 
         private TextBox txtInstallDir;
         private CheckBox chkRunAtStartup;
+        private CheckBox chkInstallSearch;
         private CheckBox chkDesktopShortcut;
         private CheckBox chkStartMenuShortcut;
         private CheckBox chkLaunchAfterInstall;
@@ -73,7 +76,7 @@ namespace GlanceSetup
         {
             Title = "Glance — Setup Installer";
             Width = 520;
-            Height = 470;
+            Height = 505;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
             ResizeMode = ResizeMode.NoResize;
             WindowStyle = WindowStyle.None;
@@ -274,6 +277,11 @@ namespace GlanceSetup
                 true,
                 true
             );
+            chkInstallSearch = CreateSetupCheckBox(
+                "Install Glance Search (Spotlight App Launcher)",
+                true,
+                false
+            );
             chkDesktopShortcut = CreateSetupCheckBox(
                 "Create Desktop Shortcut (Glance)",
                 true,
@@ -291,6 +299,7 @@ namespace GlanceSetup
             );
 
             optsStack.Children.Add(chkRunAtStartup);
+            optsStack.Children.Add(chkInstallSearch);
             optsStack.Children.Add(chkDesktopShortcut);
             optsStack.Children.Add(chkStartMenuShortcut);
             optsStack.Children.Add(chkLaunchAfterInstall);
@@ -490,6 +499,33 @@ namespace GlanceSetup
                 }
                 catch { }
 
+                // 7. Configure Glance Search component preference
+                try
+                {
+                    string dataDir = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Glance");
+                    Directory.CreateDirectory(dataDir);
+                    string configPath = System.IO.Path.Combine(dataDir, "config.json");
+                    bool searchChoice = (chkInstallSearch.IsChecked == true);
+
+                    Dictionary<string, object> cfgDict = null;
+                    if (File.Exists(configPath))
+                    {
+                        try
+                        {
+                            cfgDict = JsonSerializer.Deserialize<Dictionary<string, object>>(File.ReadAllText(configPath, Encoding.UTF8));
+                        }
+                        catch { }
+                    }
+                    if (cfgDict == null)
+                    {
+                        cfgDict = new Dictionary<string, object>();
+                    }
+                    cfgDict["isSearchInstalled"] = searchChoice;
+                    cfgDict["isSearchEnabled"] = searchChoice;
+                    File.WriteAllText(configPath, JsonSerializer.Serialize(cfgDict), Encoding.UTF8);
+                }
+                catch { }
+
                 progressFill.Width = progressTrack.ActualWidth;
                 statusLabel.Text = "✓ Installation succeeded! Run at Windows Startup: " + (chkRunAtStartup.IsChecked == true ? "ENABLED" : "DISABLED");
                 statusLabel.Foreground = new SolidColorBrush(Color.FromRgb(28, 231, 85));
@@ -507,8 +543,9 @@ namespace GlanceSetup
                 MessageBox.Show(
                     "Glance was successfully installed!\n\n" +
                     "• Location: " + targetExe + "\n" +
-                    "• Run at Windows Startup: " + (chkRunAtStartup.IsChecked == true ? "Enabled (Automatically starts on boot)" : "Disabled") + "\n\n" +
-                    "You can also change Startup and Display options anytime via the ⚙️ icon or right-clicking the System Tray icon.",
+                    "• Run at Windows Startup: " + (chkRunAtStartup.IsChecked == true ? "Enabled (Automatically starts on boot)" : "Disabled") + "\n" +
+                    "• Glance Search Component: " + (chkInstallSearch.IsChecked == true ? "Installed & Active" : "Not Installed (Can be installed anytime in Settings)") + "\n\n" +
+                    "You can customize options anytime via the ⚙️ icon or right-clicking the System Tray icon.",
                     "Installation Complete",
                     MessageBoxButton.OK,
                     MessageBoxImage.Information

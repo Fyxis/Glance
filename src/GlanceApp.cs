@@ -120,6 +120,9 @@ namespace Glance
         public uint hotkeyKey { get; set; }
         public string hotkeyDisplay { get; set; }
 
+        public bool isSearchInstalled { get; set; } = true;
+        public bool isSearchEnabled { get; set; } = true;
+
         public AppConfig()
         {
             backgroundAlpha = 175;
@@ -142,6 +145,9 @@ namespace Glance
             hotkeyModifiers = NativeMethods.MOD_CONTROL | NativeMethods.MOD_SHIFT;
             hotkeyKey = NativeMethods.VK_P;
             hotkeyDisplay = "Ctrl + Shift + P";
+
+            isSearchInstalled = true;
+            isSearchEnabled = true;
         }
     }
 
@@ -1477,7 +1483,12 @@ namespace Glance
         private CheckBox chkSlideNotes;
         private CheckBox chkSlideShelf;
 
-        // Hotkey Customization
+        // Hotkey & Search Customization
+        private bool tempIsSearchInstalled;
+        private bool tempIsSearchEnabled;
+        private Border cardSearch;
+        private StackPanel spSearchBody;
+        private CheckBox chkEnableSearch;
         private uint tempHotkeyModifiers;
         private uint tempHotkeyKey;
         private string tempHotkeyDisplay;
@@ -1510,6 +1521,8 @@ namespace Glance
             Topmost = true;
             Closed += (s, e) => MemoryOptimizer.TrimMemory(force: true);
 
+            tempIsSearchInstalled = parentIsland != null ? parentIsland.IsSearchInstalled : true;
+            tempIsSearchEnabled = parentIsland != null ? parentIsland.IsSearchEnabled : true;
             tempHotkeyModifiers = parentIsland != null ? parentIsland.HotkeyModifiers : (NativeMethods.MOD_CONTROL | NativeMethods.MOD_SHIFT);
             tempHotkeyKey = parentIsland != null ? parentIsland.HotkeyKey : NativeMethods.VK_P;
             tempHotkeyDisplay = parentIsland != null && !string.IsNullOrEmpty(parentIsland.HotkeyDisplay) ? parentIsland.HotkeyDisplay : "Ctrl + Shift + P";
@@ -1879,40 +1892,186 @@ namespace Glance
             cardAlpha.Child = spAlpha;
             sp.Children.Add(cardAlpha);
 
-            // Option 5: Customizable Global Shortcut for Glance Search
-            Border cardShortcut = CreateOptionCard();
-            StackPanel spShortcut = new StackPanel();
+            // Option 5: Glance Search Component Settings (ON/OFF Toggle, Installer, Shortcut Recorder)
+            cardSearch = CreateOptionCard();
+            spSearchBody = new StackPanel();
+            cardSearch.Child = spSearchBody;
+            RenderSearchOptionCard();
+            sp.Children.Add(cardSearch);
 
-            TextBlock lblShortcutTitle = new TextBlock
+            sv.Content = sp;
+            return sv;
+        }
+
+        private void RenderSearchOptionCard()
+        {
+            if (spSearchBody == null) return;
+            spSearchBody.Children.Clear();
+
+            // Header Row: Title on Left, Badge on Right
+            DockPanel dpHeader = new DockPanel { Margin = new Thickness(0, 0, 0, 6) };
+
+            Border badge = new Border
             {
-                Text = "Glance Search Global Shortcut (Spotlight):",
+                CornerRadius = new CornerRadius(5),
+                Padding = new Thickness(7, 2, 7, 2),
+                VerticalAlignment = VerticalAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            DockPanel.SetDock(badge, Dock.Right);
+
+            TextBlock badgeText = new TextBlock
+            {
+                FontSize = 10,
+                FontWeight = FontWeights.Bold
+            };
+            badge.Child = badgeText;
+
+            if (!tempIsSearchInstalled)
+            {
+                badge.Background = new SolidColorBrush(Color.FromArgb(45, 245, 158, 11));
+                badge.BorderBrush = new SolidColorBrush(Color.FromArgb(120, 245, 158, 11));
+                badge.BorderThickness = new Thickness(1);
+                badgeText.Foreground = new SolidColorBrush(Color.FromRgb(251, 191, 36));
+                badgeText.Text = "NOT INSTALLED";
+            }
+            else if (tempIsSearchEnabled)
+            {
+                Color acc = MainWindow.ColorFromHex(tempColorAccent, Color.FromRgb(28, 231, 85));
+                badge.Background = new SolidColorBrush(Color.FromArgb(45, acc.R, acc.G, acc.B));
+                badge.BorderBrush = new SolidColorBrush(Color.FromArgb(120, acc.R, acc.G, acc.B));
+                badge.BorderThickness = new Thickness(1);
+                badgeText.Foreground = new SolidColorBrush(acc);
+                badgeText.Text = "ACTIVE & READY";
+            }
+            else
+            {
+                badge.Background = new SolidColorBrush(Color.FromArgb(45, 120, 120, 130));
+                badge.BorderBrush = new SolidColorBrush(Color.FromArgb(100, 120, 120, 130));
+                badge.BorderThickness = new Thickness(1);
+                badgeText.Foreground = new SolidColorBrush(Color.FromRgb(160, 160, 175));
+                badgeText.Text = "DISABLED";
+            }
+
+            dpHeader.Children.Add(badge);
+
+            TextBlock lblSearchTitle = new TextBlock
+            {
+                Text = "Glance Search (Spotlight Launcher):",
                 Foreground = Brushes.White,
                 FontSize = 12.5,
                 FontWeight = FontWeights.SemiBold,
-                Margin = new Thickness(0, 0, 0, 4)
+                VerticalAlignment = VerticalAlignment.Center
             };
-            spShortcut.Children.Add(lblShortcutTitle);
+            dpHeader.Children.Add(lblSearchTitle);
+            spSearchBody.Children.Add(dpHeader);
 
-            TextBlock lblShortcutSub = new TextBlock
+            if (!tempIsSearchInstalled)
             {
-                Text = "Click the box below, then press your desired key combination (Default: Ctrl + Shift + P):",
+                // Component is NOT installed yet
+                TextBlock lblNotInstalled = new TextBlock
+                {
+                    Text = "Glance Search component was excluded during initial setup. Install it anytime to search and launch applications, files, and queries via a global shortcut or the Notch 🔍 icon.",
+                    Foreground = new SolidColorBrush(Color.FromRgb(165, 165, 178)),
+                    FontSize = 11,
+                    Margin = new Thickness(0, 0, 0, 10),
+                    TextWrapping = TextWrapping.Wrap
+                };
+                spSearchBody.Children.Add(lblNotInstalled);
+
+                Button btnInstallNow = new Button
+                {
+                    Content = "📥 Install Glance Search Component",
+                    Height = 34,
+                    Padding = new Thickness(14, 0, 14, 0),
+                    Background = new SolidColorBrush(MainWindow.ColorFromHex(tempColorAccent, Color.FromRgb(28, 231, 85))),
+                    Foreground = Brushes.Black,
+                    FontSize = 11.5,
+                    FontWeight = FontWeights.Bold,
+                    BorderThickness = new Thickness(0),
+                    Cursor = Cursors.Hand,
+                    HorizontalAlignment = HorizontalAlignment.Left
+                };
+
+                btnInstallNow.Click += (s, e) =>
+                {
+                    btnInstallNow.IsEnabled = false;
+                    btnInstallNow.Content = "⏳ Installing & indexing applications...";
+                    DispatcherTimer t = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(750) };
+                    t.Tick += (st, ev) =>
+                    {
+                        t.Stop();
+                        tempIsSearchInstalled = true;
+                        tempIsSearchEnabled = true;
+                        if (parentIsland != null)
+                        {
+                            parentIsland.ApplySearchConfig(true, true);
+                            parentIsland.SaveAppConfig();
+                        }
+                        RenderSearchOptionCard();
+                    };
+                    t.Start();
+                };
+
+                spSearchBody.Children.Add(btnInstallNow);
+                return;
+            }
+
+            // Component IS installed: Show ON/OFF toggle switch & shortcut recorder
+            TextBlock lblSearchSub = new TextBlock
+            {
+                Text = "Spotlight-style floating app launcher with instant keyword search and keyboard navigation.",
                 Foreground = new SolidColorBrush(Color.FromRgb(165, 165, 178)),
                 FontSize = 11,
                 Margin = new Thickness(0, 0, 0, 8),
                 TextWrapping = TextWrapping.Wrap
             };
-            spShortcut.Children.Add(lblShortcutSub);
+            spSearchBody.Children.Add(lblSearchSub);
+
+            // Toggle Switch / CheckBox for ON / OFF
+            chkEnableSearch = new CheckBox
+            {
+                Content = "Enable Glance Search (Global Shortcut & Notch 🔍 Button)",
+                IsChecked = tempIsSearchEnabled,
+                Foreground = Brushes.White,
+                FontSize = 12,
+                FontWeight = FontWeights.Medium,
+                Margin = new Thickness(0, 0, 0, 10),
+                Cursor = Cursors.Hand
+            };
+
+            Border shortcutBox = new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(100, 20, 20, 26)),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(45, 45, 52)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(8),
+                Padding = new Thickness(10, 8, 10, 8),
+                Margin = new Thickness(0, 0, 0, 4)
+            };
+
+            StackPanel spShortcutInner = new StackPanel();
+
+            TextBlock lblShortcutBoxTitle = new TextBlock
+            {
+                Text = "Global Keyboard Shortcut:",
+                Foreground = new SolidColorBrush(Color.FromRgb(200, 200, 210)),
+                FontSize = 11.5,
+                FontWeight = FontWeights.SemiBold,
+                Margin = new Thickness(0, 0, 0, 6)
+            };
+            spShortcutInner.Children.Add(lblShortcutBoxTitle);
 
             DockPanel dpShortcutRow = new DockPanel();
 
             resetHotkeyBtn = new Button
             {
                 Content = "Reset to Default",
-                Height = 32,
+                Height = 30,
                 Padding = new Thickness(12, 0, 12, 0),
                 Background = new SolidColorBrush(Color.FromArgb(60, 255, 255, 255)),
                 Foreground = new SolidColorBrush(Color.FromRgb(220, 220, 230)),
-                FontSize = 11.5,
+                FontSize = 11,
                 FontWeight = FontWeights.SemiBold,
                 BorderThickness = new Thickness(0),
                 Cursor = Cursors.Hand,
@@ -1925,12 +2084,12 @@ namespace Glance
 
             shortcutKeyBadge = new Border
             {
-                Height = 32,
+                Height = 30,
                 Background = new SolidColorBrush(Color.FromArgb(220, 22, 22, 30)),
                 BorderBrush = new SolidColorBrush(Color.FromRgb(65, 65, 75)),
                 BorderThickness = new Thickness(1.2),
-                CornerRadius = new CornerRadius(7),
-                Padding = new Thickness(12, 0, 12, 0),
+                CornerRadius = new CornerRadius(6),
+                Padding = new Thickness(10, 0, 10, 0),
                 Cursor = Cursors.Hand,
                 Focusable = true,
                 Margin = new Thickness(0, 0, 8, 0)
@@ -1940,7 +2099,7 @@ namespace Glance
             {
                 Text = tempHotkeyDisplay,
                 Foreground = new SolidColorBrush(MainWindow.ColorFromHex(tempColorAccent, Color.FromRgb(28, 231, 85))),
-                FontSize = 12,
+                FontSize = 11.5,
                 FontWeight = FontWeights.Bold,
                 VerticalAlignment = VerticalAlignment.Center
             };
@@ -1949,6 +2108,7 @@ namespace Glance
 
             Action startRecording = () =>
             {
+                if (!tempIsSearchEnabled) return;
                 isRecordingHotkey = true;
                 shortcutKeyText.Text = "⌨️ Press keys now...";
                 shortcutKeyText.Foreground = new SolidColorBrush(Color.FromRgb(251, 191, 36));
@@ -1986,45 +2146,17 @@ namespace Glance
                 e.Handled = true;
 
                 Key key = (e.Key == Key.System) ? e.SystemKey : e.Key;
-
-                if (key == Key.Escape)
-                {
-                    stopRecording();
-                    return;
-                }
-
-                if (key == Key.LeftCtrl || key == Key.RightCtrl ||
-                    key == Key.LeftAlt || key == Key.RightAlt ||
-                    key == Key.LeftShift || key == Key.RightShift ||
-                    key == Key.LWin || key == Key.RWin)
-                {
-                    return;
-                }
+                if (key == Key.Escape) { stopRecording(); return; }
+                if (key == Key.LeftCtrl || key == Key.RightCtrl || key == Key.LeftAlt || key == Key.RightAlt ||
+                    key == Key.LeftShift || key == Key.RightShift || key == Key.LWin || key == Key.RWin) return;
 
                 ModifierKeys mods = Keyboard.Modifiers;
                 uint win32Mods = 0;
                 List<string> parts = new List<string>();
-
-                if ((mods & ModifierKeys.Control) != 0)
-                {
-                    win32Mods |= NativeMethods.MOD_CONTROL;
-                    parts.Add("Ctrl");
-                }
-                if ((mods & ModifierKeys.Alt) != 0)
-                {
-                    win32Mods |= NativeMethods.MOD_ALT;
-                    parts.Add("Alt");
-                }
-                if ((mods & ModifierKeys.Shift) != 0)
-                {
-                    win32Mods |= NativeMethods.MOD_SHIFT;
-                    parts.Add("Shift");
-                }
-                if ((mods & ModifierKeys.Windows) != 0)
-                {
-                    win32Mods |= NativeMethods.MOD_WIN;
-                    parts.Add("Win");
-                }
+                if ((mods & ModifierKeys.Control) != 0) { win32Mods |= NativeMethods.MOD_CONTROL; parts.Add("Ctrl"); }
+                if ((mods & ModifierKeys.Alt) != 0) { win32Mods |= NativeMethods.MOD_ALT; parts.Add("Alt"); }
+                if ((mods & ModifierKeys.Shift) != 0) { win32Mods |= NativeMethods.MOD_SHIFT; parts.Add("Shift"); }
+                if ((mods & ModifierKeys.Windows) != 0) { win32Mods |= NativeMethods.MOD_WIN; parts.Add("Win"); }
 
                 if (win32Mods == 0)
                 {
@@ -2034,12 +2166,9 @@ namespace Glance
 
                 string keyName = FormatKeyName(key);
                 parts.Add(keyName);
-
-                uint vk = (uint)KeyInterop.VirtualKeyFromKey(key);
                 tempHotkeyModifiers = win32Mods;
-                tempHotkeyKey = vk;
+                tempHotkeyKey = (uint)KeyInterop.VirtualKeyFromKey(key);
                 tempHotkeyDisplay = string.Join(" + ", parts);
-
                 stopRecording();
             };
 
@@ -2051,12 +2180,44 @@ namespace Glance
                 stopRecording();
             };
 
-            spShortcut.Children.Add(dpShortcutRow);
-            cardShortcut.Child = spShortcut;
-            sp.Children.Add(cardShortcut);
+            spShortcutInner.Children.Add(dpShortcutRow);
+            shortcutBox.Child = spShortcutInner;
 
-            sv.Content = sp;
-            return sv;
+            Action updateShortcutBoxState = () =>
+            {
+                bool on = chkEnableSearch.IsChecked == true;
+                shortcutBox.Opacity = on ? 1.0 : 0.38;
+                shortcutBox.IsEnabled = on;
+                if (!on && isRecordingHotkey) stopRecording();
+            };
+
+            chkEnableSearch.Click += (s, e) =>
+            {
+                tempIsSearchEnabled = chkEnableSearch.IsChecked == true;
+                updateShortcutBoxState();
+
+                // Update badge text and color dynamically
+                if (tempIsSearchEnabled)
+                {
+                    Color acc = MainWindow.ColorFromHex(tempColorAccent, Color.FromRgb(28, 231, 85));
+                    badge.Background = new SolidColorBrush(Color.FromArgb(45, acc.R, acc.G, acc.B));
+                    badge.BorderBrush = new SolidColorBrush(Color.FromArgb(120, acc.R, acc.G, acc.B));
+                    badgeText.Foreground = new SolidColorBrush(acc);
+                    badgeText.Text = "ACTIVE & READY";
+                }
+                else
+                {
+                    badge.Background = new SolidColorBrush(Color.FromArgb(45, 120, 120, 130));
+                    badge.BorderBrush = new SolidColorBrush(Color.FromArgb(100, 120, 120, 130));
+                    badgeText.Foreground = new SolidColorBrush(Color.FromRgb(160, 160, 175));
+                    badgeText.Text = "DISABLED";
+                }
+            };
+
+            updateShortcutBoxState();
+
+            spSearchBody.Children.Add(chkEnableSearch);
+            spSearchBody.Children.Add(shortcutBox);
         }
 
         private static string FormatKeyName(Key key)
@@ -2483,6 +2644,7 @@ namespace Glance
                 parentIsland.ShowSlideNotes = n;
                 parentIsland.ShowSlideShelf = sh;
 
+                parentIsland.ApplySearchConfig(tempIsSearchInstalled, tempIsSearchEnabled);
                 parentIsland.UpdateGlobalHotkey(tempHotkeyModifiers, tempHotkeyKey, tempHotkeyDisplay);
                 parentIsland.ApplyCustomColors();
                 parentIsland.ApplySlideVisibilityConfig();
@@ -2557,10 +2719,12 @@ namespace Glance
         public bool ShowSlideNotes { get; set; }
         public bool ShowSlideShelf { get; set; }
 
-        // Customizable Hotkey
+        // Customizable Hotkey & Search Component
         public uint HotkeyModifiers { get; set; }
         public uint HotkeyKey { get; set; }
         public string HotkeyDisplay { get; set; }
+        public bool IsSearchInstalled { get; set; } = true;
+        public bool IsSearchEnabled { get; set; } = true;
 
         private SolidColorBrush notchBgBrush;
         private static SpotlightWindow spotlightWin;
@@ -2757,6 +2921,8 @@ namespace Glance
             HotkeyModifiers = NativeMethods.MOD_CONTROL | NativeMethods.MOD_SHIFT;
             HotkeyKey = NativeMethods.VK_P;
             HotkeyDisplay = "Ctrl + Shift + P";
+            IsSearchInstalled = true;
+            IsSearchEnabled = true;
 
             string oldDir = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WindowsDynamicIsland");
             dataDir = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Glance");
@@ -2806,6 +2972,8 @@ namespace Glance
                 HotkeyModifiers = PrimaryInstance.HotkeyModifiers;
                 HotkeyKey = PrimaryInstance.HotkeyKey;
                 HotkeyDisplay = PrimaryInstance.HotkeyDisplay;
+                IsSearchInstalled = PrimaryInstance.IsSearchInstalled;
+                IsSearchEnabled = PrimaryInstance.IsSearchEnabled;
 
                 notesList = new List<NoteItem>(PrimaryInstance.notesList);
                 clipList = new List<ClipItem>(PrimaryInstance.clipList);
@@ -2940,7 +3108,9 @@ namespace Glance
 
                     hotkeyModifiers = HotkeyModifiers,
                     hotkeyKey = HotkeyKey,
-                    hotkeyDisplay = HotkeyDisplay
+                    hotkeyDisplay = HotkeyDisplay,
+                    isSearchInstalled = IsSearchInstalled,
+                    isSearchEnabled = IsSearchEnabled
                 };
                 File.WriteAllText(configFilePath, json.Serialize(cfg), Encoding.UTF8);
             }
@@ -3110,6 +3280,7 @@ namespace Glance
                         src.AddHook(WndProc);
                     }
                     UpdateGlobalHotkey(HotkeyModifiers, HotkeyKey, HotkeyDisplay);
+                    ApplySearchConfig(IsSearchInstalled, IsSearchEnabled);
                     NativeMethods.AddClipboardFormatListener(hwnd);
 
                     clockTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1000) };
@@ -3174,6 +3345,60 @@ namespace Glance
             return IntPtr.Zero;
         }
 
+        public void ApplySearchConfig(bool isInstalled, bool isEnabled)
+        {
+            IsSearchInstalled = isInstalled;
+            IsSearchEnabled = isEnabled;
+
+            bool active = IsSearchInstalled && IsSearchEnabled;
+
+            if (searchQuickBtn != null)
+            {
+                searchQuickBtn.Visibility = active ? Visibility.Visible : Visibility.Collapsed;
+            }
+
+            if (traySearchItem != null)
+            {
+                traySearchItem.Visible = active;
+            }
+
+            if (!IsCompanionWindow)
+            {
+                try
+                {
+                    IntPtr hwnd = new WindowInteropHelper(this).Handle;
+                    if (hwnd != IntPtr.Zero)
+                    {
+                        NativeMethods.UnregisterHotKey(hwnd, HOTKEY_ID_SPOTLIGHT);
+                        if (active)
+                        {
+                            NativeMethods.RegisterHotKey(
+                                hwnd,
+                                HOTKEY_ID_SPOTLIGHT,
+                                HotkeyModifiers | NativeMethods.MOD_NOREPEAT,
+                                HotkeyKey
+                            );
+                        }
+                    }
+                }
+                catch { }
+
+                if (!active && spotlightWin != null && spotlightWin.IsVisible)
+                {
+                    spotlightWin.HideSpotlight();
+                }
+
+                UpdateHotkeyTooltips();
+            }
+
+            if (CompanionInstance != null)
+            {
+                CompanionInstance.IsSearchInstalled = isInstalled;
+                CompanionInstance.IsSearchEnabled = isEnabled;
+                CompanionInstance.ApplySearchConfig(isInstalled, isEnabled);
+            }
+        }
+
         public void UpdateGlobalHotkey(uint modifiers, uint key, string display)
         {
             if (modifiers == 0 || key == 0)
@@ -3187,6 +3412,8 @@ namespace Glance
             HotkeyKey = key;
             HotkeyDisplay = string.IsNullOrWhiteSpace(display) ? "Ctrl + Shift + P" : display;
 
+            bool active = IsSearchInstalled && IsSearchEnabled;
+
             if (!IsCompanionWindow)
             {
                 try
@@ -3195,25 +3422,28 @@ namespace Glance
                     if (hwnd != IntPtr.Zero)
                     {
                         NativeMethods.UnregisterHotKey(hwnd, HOTKEY_ID_SPOTLIGHT);
-                        bool registered = NativeMethods.RegisterHotKey(
-                            hwnd,
-                            HOTKEY_ID_SPOTLIGHT,
-                            HotkeyModifiers | NativeMethods.MOD_NOREPEAT,
-                            HotkeyKey
-                        );
-
-                        if (!registered)
+                        if (active)
                         {
-                            // If custom combination failed (e.g. system conflict), fall back to default Ctrl + Shift + P
-                            HotkeyModifiers = NativeMethods.MOD_CONTROL | NativeMethods.MOD_SHIFT;
-                            HotkeyKey = NativeMethods.VK_P;
-                            HotkeyDisplay = "Ctrl + Shift + P";
-                            NativeMethods.RegisterHotKey(
+                            bool registered = NativeMethods.RegisterHotKey(
                                 hwnd,
                                 HOTKEY_ID_SPOTLIGHT,
                                 HotkeyModifiers | NativeMethods.MOD_NOREPEAT,
                                 HotkeyKey
                             );
+
+                            if (!registered)
+                            {
+                                // If custom combination failed (e.g. system conflict), fall back to default Ctrl + Shift + P
+                                HotkeyModifiers = NativeMethods.MOD_CONTROL | NativeMethods.MOD_SHIFT;
+                                HotkeyKey = NativeMethods.VK_P;
+                                HotkeyDisplay = "Ctrl + Shift + P";
+                                NativeMethods.RegisterHotKey(
+                                    hwnd,
+                                    HOTKEY_ID_SPOTLIGHT,
+                                    HotkeyModifiers | NativeMethods.MOD_NOREPEAT,
+                                    HotkeyKey
+                                );
+                            }
                         }
                     }
                 }
@@ -3233,18 +3463,23 @@ namespace Glance
 
         public void UpdateHotkeyTooltips()
         {
+            bool active = IsSearchInstalled && IsSearchEnabled;
             if (searchQuickBtn != null)
             {
                 searchQuickBtn.ToolTip = "Glance Search (" + HotkeyDisplay + ")";
+                searchQuickBtn.Visibility = active ? Visibility.Visible : Visibility.Collapsed;
             }
             if (traySearchItem != null)
             {
                 traySearchItem.Text = "Glance Search (" + HotkeyDisplay + ")";
+                traySearchItem.Visible = active;
             }
         }
 
         public void ToggleSpotlightSearch()
         {
+            if (!IsSearchInstalled || !IsSearchEnabled) return;
+
             if (spotlightWin == null)
             {
                 spotlightWin = new SpotlightWindow();
@@ -3586,7 +3821,8 @@ namespace Glance
                 HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Center,
                 Cursor = Cursors.Hand,
-                ToolTip = "Glance Search (" + HotkeyDisplay + ")"
+                ToolTip = "Glance Search (" + HotkeyDisplay + ")",
+                Visibility = (IsSearchInstalled && IsSearchEnabled) ? Visibility.Visible : Visibility.Collapsed
             };
             TextBlock searchQuickIcon = new TextBlock
             {
@@ -6431,6 +6667,9 @@ namespace Glance
                             HotkeyKey = cfg.hotkeyKey;
                             HotkeyDisplay = !string.IsNullOrEmpty(cfg.hotkeyDisplay) ? cfg.hotkeyDisplay : "Ctrl + Shift + P";
                         }
+
+                        IsSearchInstalled = cfg.isSearchInstalled;
+                        IsSearchEnabled = cfg.isSearchEnabled;
                     }
                 }
             }
@@ -6749,6 +6988,7 @@ namespace Glance
 
             Forms.ContextMenuStrip menu = new Forms.ContextMenuStrip();
             traySearchItem = new Forms.ToolStripMenuItem("Glance Search (" + HotkeyDisplay + ")", null, (s, e) => Dispatcher.Invoke(ToggleSpotlightSearch));
+            traySearchItem.Visible = (IsSearchInstalled && IsSearchEnabled);
             menu.Items.Add(traySearchItem);
             menu.Items.Add("Glance Settings...", null, (s, e) => Dispatcher.Invoke(OpenSettingsDialog));
 
