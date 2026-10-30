@@ -624,7 +624,35 @@ namespace Glance
         public const uint MOD_NOREPEAT = 0x4000;
         public const uint VK_P = 0x50;
         public const int VK_SHIFT = 0x10;
+        public const byte VK_LWIN = 0x5B;
+        public const byte VK_TAB = 0x09;
+        public const uint KEYEVENTF_KEYUP = 0x0002;
         public const int WM_MOUSEHWHEEL = 0x020E;
+
+        [DllImport("user32.dll")]
+        public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
+
+        public static void TriggerStartMenu()
+        {
+            try
+            {
+                keybd_event(VK_LWIN, 0, 0, UIntPtr.Zero);
+                keybd_event(VK_LWIN, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+            }
+            catch { }
+        }
+
+        public static void TriggerTaskView()
+        {
+            try
+            {
+                keybd_event(VK_LWIN, 0, 0, UIntPtr.Zero);
+                keybd_event(VK_TAB, 0, 0, UIntPtr.Zero);
+                keybd_event(VK_TAB, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+                keybd_event(VK_LWIN, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+            }
+            catch { }
+        }
 
         [DllImport("user32.dll")]
         public static extern short GetAsyncKeyState(int vKey);
@@ -1597,19 +1625,19 @@ namespace Glance
                 ClipToBounds = false
             };
 
-            // Register dock items (10 Apps + Separator + Trash)
-            AddAppItem("Finder", () => LaunchFinder(), "explorer", BuildFinderIcon());
-            AddAppItem("Launchpad", () => parentWindow?.ToggleSpotlightSearch(), "Glance", BuildLaunchpadIcon());
-            AddAppItem("Safari", () => LaunchBrowser(), "chrome|msedge|firefox|brave", BuildBrowserIcon());
-            AddAppItem("Messages", () => LaunchChat(), "Discord|WhatsApp|Telegram", BuildMessagesIcon());
-            AddAppItem("FaceTime", () => LaunchCamera(), "Camera|Teams|Zoom", BuildFaceTimeIcon());
-            AddAppItem("Mail", () => LaunchMail(), "HxOutlook|Outlook", BuildMailIcon());
+            // Register Windows 11 dock items (10 Apps + Separator + Recycle Bin)
+            AddAppItem("Start", () => NativeMethods.TriggerStartMenu(), "StartMenuExperienceHost", BuildStartIcon());
+            AddAppItem("Search", () => parentWindow?.ToggleSpotlightSearch(), "Glance|SearchApp", BuildSearchIcon());
+            AddAppItem("Task View", () => NativeMethods.TriggerTaskView(), "TaskView", BuildTaskViewIcon());
+            AddAppItem("File Explorer", () => LaunchExplorer(), "explorer", BuildExplorerIcon());
+            AddAppItem("Microsoft Edge", () => LaunchBrowser(), "msedge|chrome|firefox|brave", BuildEdgeIcon());
+            AddAppItem("Microsoft Store", () => LaunchStore(), "WinStore.App", BuildStoreIcon());
+            AddAppItem("Terminal", () => LaunchTerminal(), "WindowsTerminal|powershell|cmd", BuildTerminalIcon());
+            AddAppItem("Snipping Tool", () => LaunchSnippingTool(), "SnippingTool|ScreenClippingHost", BuildSnippingToolIcon());
             AddAppItem("Photos", () => LaunchPhotos(), "Microsoft.Photos", BuildPhotosIcon());
-            AddAppItem("Music", () => LaunchMusic(), "Spotify", BuildMusicIcon());
-            AddAppItem("Terminal", () => LaunchTerminal(), "WindowsTerminal|cmd|powershell", BuildTerminalIcon());
-            AddAppItem("System Settings", () => parentWindow?.OpenSettingsDialog(), "SystemSettings", BuildSettingsIcon());
+            AddAppItem("Settings", () => parentWindow?.OpenSettingsDialog(), "SystemSettings", BuildSettingsIcon());
             AddSeparator();
-            AddAppItem("Trash", () => LaunchTrash(), "", BuildTrashIcon());
+            AddAppItem("Recycle Bin", () => LaunchRecycleBin(), "", BuildRecycleBinIcon());
 
             dockPill.Child = itemsPanel;
             dockPill.PreviewMouseMove += OnDockMouseMove;
@@ -1646,21 +1674,23 @@ namespace Glance
             {
                 Width = 46,
                 Height = 46,
-                CornerRadius = new CornerRadius(12),
-                ClipToBounds = true,
+                CornerRadius = new CornerRadius(8),
+                Background = Brushes.Transparent,
                 Cursor = Cursors.Hand,
                 RenderTransformOrigin = new Point(0.5, 1.0),
                 RenderTransform = tg,
                 Child = iconElement,
                 Effect = new DropShadowEffect
                 {
-                    BlurRadius = 8,
+                    BlurRadius = 10,
                     ShadowDepth = 2,
                     Direction = 270,
-                    Opacity = 0.28,
+                    Opacity = 0.35,
                     Color = Colors.Black
                 }
             };
+            ctrl.MouseEnter += (s, e) => ctrl.IconBorder.Background = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255));
+            ctrl.MouseLeave += (s, e) => ctrl.IconBorder.Background = Brushes.Transparent;
             Grid.SetRow(ctrl.IconBorder, 0);
 
             ctrl.RunningDot = new Ellipse
@@ -1888,29 +1918,36 @@ namespace Glance
             });
         }
 
-        private void LaunchFinder()
+        private void LaunchExplorer()
         {
             try { Process.Start(new ProcessStartInfo("explorer.exe") { UseShellExecute = true }); } catch { }
         }
 
         private void LaunchBrowser()
         {
-            try { Process.Start(new ProcessStartInfo("https://www.google.com") { UseShellExecute = true }); } catch { }
+            try { Process.Start(new ProcessStartInfo("microsoft-edge:") { UseShellExecute = true }); }
+            catch { try { Process.Start(new ProcessStartInfo("https://www.google.com") { UseShellExecute = true }); } catch { } }
         }
 
-        private void LaunchChat()
+        private void LaunchStore()
         {
-            try { Process.Start(new ProcessStartInfo("https://web.whatsapp.com") { UseShellExecute = true }); } catch { }
+            try { Process.Start(new ProcessStartInfo("ms-windows-store:") { UseShellExecute = true }); } catch { }
         }
 
-        private void LaunchCamera()
+        private void LaunchTerminal()
         {
-            try { Process.Start(new ProcessStartInfo("microsoft.windows.camera:") { UseShellExecute = true }); } catch { }
+            try { Process.Start(new ProcessStartInfo("wt.exe") { UseShellExecute = true }); }
+            catch
+            {
+                try { Process.Start(new ProcessStartInfo("powershell.exe") { UseShellExecute = true }); }
+                catch { try { Process.Start(new ProcessStartInfo("cmd.exe") { UseShellExecute = true }); } catch { } }
+            }
         }
 
-        private void LaunchMail()
+        private void LaunchSnippingTool()
         {
-            try { Process.Start(new ProcessStartInfo("mailto:") { UseShellExecute = true }); } catch { }
+            try { Process.Start(new ProcessStartInfo("ms-screenclip:") { UseShellExecute = true }); }
+            catch { try { Process.Start(new ProcessStartInfo("snippingtool.exe") { UseShellExecute = true }); } catch { } }
         }
 
         private void LaunchPhotos()
@@ -1919,331 +1956,316 @@ namespace Glance
             catch { try { Process.Start(new ProcessStartInfo("explorer.exe", Environment.GetFolderPath(Environment.SpecialFolder.MyPictures)) { UseShellExecute = true }); } catch { } }
         }
 
-        private void LaunchMusic()
-        {
-            try
-            {
-                Process.Start(new ProcessStartInfo("spotify:") { UseShellExecute = true });
-            }
-            catch
-            {
-                parentWindow?.Dispatcher.Invoke(() =>
-                {
-                    parentWindow.SwitchSlide(0);
-                    parentWindow.AnimateToExpanded();
-                });
-            }
-        }
-
-        private void LaunchTerminal()
-        {
-            try { Process.Start(new ProcessStartInfo("wt.exe") { UseShellExecute = true }); }
-            catch { try { Process.Start(new ProcessStartInfo("cmd.exe") { UseShellExecute = true }); } catch { } }
-        }
-
-        private void LaunchTrash()
+        private void LaunchRecycleBin()
         {
             try { Process.Start(new ProcessStartInfo("explorer.exe", "shell:RecycleBinFolder") { UseShellExecute = true }); } catch { }
         }
 
-        private static FrameworkElement BuildFinderIcon()
+        private static FrameworkElement BuildStartIcon()
         {
-            Grid g = new Grid
-            {
-                Background = new LinearGradientBrush(
-                    Color.FromRgb(41, 182, 246),
-                    Color.FromRgb(2, 132, 199),
-                    new Point(0, 0),
-                    new Point(0, 1))
-            };
+            Grid g = new Grid { Width = 30, Height = 30 };
+            LinearGradientBrush blueGrad = new LinearGradientBrush(
+                Color.FromRgb(0, 164, 239),
+                Color.FromRgb(0, 120, 212),
+                new Point(0, 0), new Point(1, 1)
+            );
 
-            Border leftHalf = new Border
-            {
-                Width = 23,
-                HorizontalAlignment = HorizontalAlignment.Left,
-                Background = new SolidColorBrush(Color.FromArgb(45, 255, 255, 255))
-            };
-            g.Children.Add(leftHalf);
+            Border tl = new Border { Width = 13, Height = 13, CornerRadius = new CornerRadius(2), Background = blueGrad, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
+            Border tr = new Border { Width = 13, Height = 13, CornerRadius = new CornerRadius(2), Background = blueGrad, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top };
+            Border bl = new Border { Width = 13, Height = 13, CornerRadius = new CornerRadius(2), Background = blueGrad, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Bottom };
+            Border br = new Border { Width = 13, Height = 13, CornerRadius = new CornerRadius(2), Background = blueGrad, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom };
 
-            Path split = new Path
-            {
-                Data = Geometry.Parse("M 23,4 C 23.5,12 21.5,18 23,24 C 24.5,30 23,42 23,42"),
-                Stroke = new SolidColorBrush(Color.FromRgb(20, 50, 110)),
-                StrokeThickness = 1.8
-            };
-            g.Children.Add(split);
+            g.Children.Add(tl);
+            g.Children.Add(tr);
+            g.Children.Add(bl);
+            g.Children.Add(br);
+            return g;
+        }
 
-            Ellipse eyeL = new Ellipse
+        private static FrameworkElement BuildSearchIcon()
+        {
+            Grid g = new Grid { Width = 32, Height = 32 };
+            Path glass = new Path
             {
-                Width = 4,
-                Height = 4,
-                Fill = new SolidColorBrush(Color.FromRgb(20, 50, 110)),
-                HorizontalAlignment = HorizontalAlignment.Left,
-                VerticalAlignment = VerticalAlignment.Top,
-                Margin = new Thickness(14, 17, 0, 0)
-            };
-            Ellipse eyeR = new Ellipse
-            {
-                Width = 4,
-                Height = 4,
-                Fill = new SolidColorBrush(Color.FromRgb(20, 50, 110)),
-                HorizontalAlignment = HorizontalAlignment.Left,
-                VerticalAlignment = VerticalAlignment.Top,
-                Margin = new Thickness(28, 17, 0, 0)
-            };
-            g.Children.Add(eyeL);
-            g.Children.Add(eyeR);
-
-            Path smile = new Path
-            {
-                Data = Geometry.Parse("M 14,28 C 18,36 28,36 32,28"),
-                Stroke = new SolidColorBrush(Color.FromRgb(20, 50, 110)),
-                StrokeThickness = 2.4,
+                Data = Geometry.Parse("M 14,4 C 8.5,4 4,8.5 4,14 C 4,19.5 8.5,24 14,24 C 19.5,24 24,19.5 24,14 C 24,8.5 19.5,4 14,4 Z M 21.2,21.2 L 28,28"),
+                Stroke = new LinearGradientBrush(Color.FromRgb(56, 189, 248), Color.FromRgb(2, 132, 199), new Point(0, 0), new Point(1, 1)),
+                StrokeThickness = 2.8,
                 StrokeStartLineCap = PenLineCap.Round,
                 StrokeEndLineCap = PenLineCap.Round
             };
-            g.Children.Add(smile);
+            Ellipse innerLens = new Ellipse
+            {
+                Width = 14,
+                Height = 14,
+                Fill = new SolidColorBrush(Color.FromArgb(40, 56, 189, 248)),
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(7, 7, 0, 0)
+            };
+            g.Children.Add(innerLens);
+            g.Children.Add(glass);
             return g;
         }
 
-        private static FrameworkElement BuildLaunchpadIcon()
+        private static FrameworkElement BuildTaskViewIcon()
         {
-            Grid g = new Grid { Background = Brushes.White };
-            Grid ug = new Grid { Margin = new Thickness(7) };
-            for (int r = 0; r < 3; r++) ug.RowDefinitions.Add(new RowDefinition());
-            for (int c = 0; c < 3; c++) ug.ColumnDefinitions.Add(new ColumnDefinition());
-
-            Color[] colors = new Color[]
+            Grid g = new Grid { Width = 34, Height = 30 };
+            Border back = new Border
             {
-                Color.FromRgb(249, 115, 22), Color.FromRgb(239, 68, 68), Color.FromRgb(168, 85, 247),
-                Color.FromRgb(59, 130, 246), Color.FromRgb(236, 72, 153), Color.FromRgb(16, 185, 129),
-                Color.FromRgb(234, 179, 8), Color.FromRgb(6, 182, 212), Color.FromRgb(99, 102, 241)
+                Width = 20,
+                Height = 16,
+                CornerRadius = new CornerRadius(3),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(100, 116, 139)),
+                BorderThickness = new Thickness(1.8),
+                Background = new SolidColorBrush(Color.FromArgb(120, 30, 41, 59)),
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(2, 2, 0, 0)
+            };
+            Border front = new Border
+            {
+                Width = 20,
+                Height = 16,
+                CornerRadius = new CornerRadius(3),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(0, 120, 212)),
+                BorderThickness = new Thickness(2.0),
+                Background = new SolidColorBrush(Color.FromArgb(160, 2, 132, 199)),
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Bottom,
+                Margin = new Thickness(0, 0, 2, 2)
+            };
+            g.Children.Add(back);
+            g.Children.Add(front);
+            return g;
+        }
+
+        private static FrameworkElement BuildExplorerIcon()
+        {
+            Grid g = new Grid { Width = 36, Height = 32 };
+
+            Path backFolder = new Path
+            {
+                Data = Geometry.Parse("M 2,6 C 2,4.5 3.5,3.5 5,3.5 L 13,3.5 C 14.5,3.5 15.5,4.5 16.5,6 L 18,8 L 31,8 C 32.5,8 34,9.5 34,11 L 34,26 C 34,27.5 32.5,29 31,29 L 5,29 C 3.5,29 2,27.5 2,26 Z"),
+                Fill = new LinearGradientBrush(Color.FromRgb(245, 158, 11), Color.FromRgb(217, 119, 6), new Point(0, 0), new Point(0, 1))
             };
 
-            int idx = 0;
-            foreach (var col in colors)
+            Border sheet = new Border
             {
-                Border tile = new Border
-                {
-                    Width = 8,
-                    Height = 8,
-                    CornerRadius = new CornerRadius(2.5),
-                    Background = new SolidColorBrush(col),
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center
-                };
-                Grid.SetRow(tile, idx / 3);
-                Grid.SetColumn(tile, idx % 3);
-                ug.Children.Add(tile);
-                idx++;
-            }
+                Width = 22,
+                Height = 10,
+                CornerRadius = new CornerRadius(2),
+                Background = new LinearGradientBrush(Color.FromRgb(56, 189, 248), Color.FromRgb(2, 132, 199), new Point(0, 0), new Point(1, 0)),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(0, 8, 0, 0)
+            };
 
-            g.Children.Add(ug);
+            Path frontFlap = new Path
+            {
+                Data = Geometry.Parse("M 2,12 C 2,10.5 3.5,9.5 5,9.5 L 31,9.5 C 32.5,9.5 34,10.5 34,12 L 34,26 C 34,27.5 32.5,29 31,29 L 5,29 C 3.5,29 2,27.5 2,26 Z"),
+                Fill = new LinearGradientBrush(Color.FromRgb(251, 191, 36), Color.FromRgb(245, 158, 11), new Point(0, 0), new Point(0, 1)),
+                Effect = new DropShadowEffect { BlurRadius = 4, ShadowDepth = 1, Direction = 90, Opacity = 0.25, Color = Colors.Black }
+            };
+
+            g.Children.Add(backFolder);
+            g.Children.Add(sheet);
+            g.Children.Add(frontFlap);
             return g;
         }
 
-        private static FrameworkElement BuildBrowserIcon()
+        private static FrameworkElement BuildEdgeIcon()
         {
-            Grid g = new Grid { Background = Brushes.White };
-            Ellipse circle = new Ellipse
+            Grid g = new Grid { Width = 34, Height = 34 };
+
+            Path wave = new Path
             {
-                Width = 36,
-                Height = 36,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
+                Data = Geometry.Parse("M 17,2 C 25.3,2 32,8.7 32,17 C 32,23.5 27.8,29 22,31 C 24,28 25,24.5 24.5,21 C 23.8,16 19.5,13.5 15,14 C 11,14.5 8,17.5 8,21.5 C 8,25.5 11,28.5 15,28.8 C 7.5,28.5 2,22.5 2,15 C 2,7.8 8.7,2 17,2 Z"),
                 Fill = new LinearGradientBrush(
-                    Color.FromRgb(56, 189, 248),
-                    Color.FromRgb(2, 132, 199),
-                    new Point(0, 0),
-                    new Point(0, 1))
-            };
-            g.Children.Add(circle);
-
-            Path needleRed = new Path
-            {
-                Data = Geometry.Parse("M 23,23 L 33,13 L 26,21 Z"),
-                Fill = new SolidColorBrush(Color.FromRgb(239, 68, 68))
-            };
-            Path needleWhite = new Path
-            {
-                Data = Geometry.Parse("M 23,23 L 13,33 L 20,25 Z"),
-                Fill = Brushes.White
-            };
-            Ellipse pin = new Ellipse
-            {
-                Width = 3.5,
-                Height = 3.5,
-                Fill = Brushes.White,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-
-            g.Children.Add(needleRed);
-            g.Children.Add(needleWhite);
-            g.Children.Add(pin);
-            return g;
-        }
-
-        private static FrameworkElement BuildMessagesIcon()
-        {
-            Grid g = new Grid
-            {
-                Background = new LinearGradientBrush(
-                    Color.FromRgb(34, 197, 94),
-                    Color.FromRgb(21, 128, 61),
-                    new Point(0, 0),
-                    new Point(0, 1))
-            };
-            Path bubble = new Path
-            {
-                Data = Geometry.Parse("M 11,15 C 11,15 35,15 35,24 C 35,32 20,32 15,35 L 15,30 C 11,29 11,27 11,24 Z"),
-                Fill = Brushes.White
-            };
-            g.Children.Add(bubble);
-            return g;
-        }
-
-        private static FrameworkElement BuildFaceTimeIcon()
-        {
-            Grid g = new Grid
-            {
-                Background = new LinearGradientBrush(
-                    Color.FromRgb(74, 222, 128),
-                    Color.FromRgb(22, 163, 74),
-                    new Point(0, 0),
-                    new Point(0, 1))
-            };
-            Path cam = new Path
-            {
-                Data = Geometry.Parse("M 12,17 L 27,17 C 28.5,17 29,18 29,19 L 29,29 C 29,30 28.5,31 27,31 L 12,31 C 10.5,31 10,30 10,29 L 10,19 C 10,18 10.5,17 12,17 Z M 29,21.5 L 37,16 L 37,32 L 29,26.5 Z"),
-                Fill = Brushes.White
-            };
-            g.Children.Add(cam);
-            return g;
-        }
-
-        private static FrameworkElement BuildMailIcon()
-        {
-            Grid g = new Grid
-            {
-                Background = new LinearGradientBrush(
-                    Color.FromRgb(96, 165, 250),
-                    Color.FromRgb(37, 99, 235),
-                    new Point(0, 0),
-                    new Point(0, 1))
-            };
-            Path env = new Path
-            {
-                Data = Geometry.Parse("M 8,16 L 38,16 L 38,32 L 8,32 Z M 8,16 L 23,26 L 38,16 M 8,32 L 18,23 M 38,32 L 28,23"),
-                Stroke = Brushes.White,
-                StrokeThickness = 2,
-                Fill = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255))
-            };
-            g.Children.Add(env);
-            return g;
-        }
-
-        private static FrameworkElement BuildPhotosIcon()
-        {
-            Grid g = new Grid { Background = Brushes.White };
-            Color[] petalColors = new Color[]
-            {
-                Color.FromRgb(239, 68, 68),
-                Color.FromRgb(249, 115, 22),
-                Color.FromRgb(234, 179, 8),
-                Color.FromRgb(34, 197, 94),
-                Color.FromRgb(6, 182, 212),
-                Color.FromRgb(59, 130, 246),
-                Color.FromRgb(168, 85, 247),
-                Color.FromRgb(236, 72, 153)
-            };
-
-            for (int i = 0; i < 8; i++)
-            {
-                Border petal = new Border
-                {
-                    Width = 7.5,
-                    Height = 15,
-                    CornerRadius = new CornerRadius(4),
-                    Background = new SolidColorBrush(Color.FromArgb(210, petalColors[i].R, petalColors[i].G, petalColors[i].B)),
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    RenderTransformOrigin = new Point(0.5, 1.0),
-                    RenderTransform = new TransformGroup
+                    new GradientStopCollection
                     {
-                        Children = new TransformCollection
-                        {
-                            new TranslateTransform(0, -5),
-                            new RotateTransform(i * 45.0)
-                        }
-                    }
-                };
-                g.Children.Add(petal);
-            }
+                        new GradientStop(Color.FromRgb(12, 89, 164), 0.0),
+                        new GradientStop(Color.FromRgb(0, 164, 239), 0.45),
+                        new GradientStop(Color.FromRgb(36, 176, 123), 1.0)
+                    },
+                    new Point(0, 0), new Point(1, 1)
+                )
+            };
+
+            Path crest = new Path
+            {
+                Data = Geometry.Parse("M 15,14 C 19.5,13.5 23.8,16 24.5,21 C 22,23 18.5,23.5 15.5,22 C 14.5,21.5 14,20 14.5,19 C 15,18 16.5,17.5 17.5,18 C 19,18.8 21,18 21.5,16.5 C 21.8,15.5 20.8,14.5 19.5,14.2 Z"),
+                Fill = new LinearGradientBrush(Color.FromRgb(36, 176, 123), Color.FromRgb(16, 185, 129), new Point(0, 0), new Point(1, 1))
+            };
+
+            g.Children.Add(wave);
+            g.Children.Add(crest);
             return g;
         }
 
-        private static FrameworkElement BuildMusicIcon()
+        private static FrameworkElement BuildStoreIcon()
         {
-            Grid g = new Grid
+            Grid g = new Grid { Width = 34, Height = 34 };
+
+            Path handle = new Path
             {
-                Background = new LinearGradientBrush(
-                    Color.FromRgb(251, 113, 133),
-                    Color.FromRgb(225, 29, 72),
-                    new Point(0, 0),
-                    new Point(0, 1))
+                Data = Geometry.Parse("M 12,12 C 12,6 22,6 22,12"),
+                Stroke = new SolidColorBrush(Color.FromRgb(148, 163, 184)),
+                StrokeThickness = 2.4,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(0, 2, 0, 0)
             };
-            Path notes = new Path
+
+            Border bag = new Border
             {
-                Data = Geometry.Parse("M 16,13 L 32,9.5 L 32,27 C 31,26 29,25.5 27,26 C 24,27 23,29 24,31 C 25,33 28,33 30,32 C 31.5,31 32,29.5 32,28 L 32,15 L 18,18.5 L 18,29 C 17,28 15,27.5 13,28 C 10,29 9,31 10,33 C 11,35 14,35 16,34 C 17.5,33 18,31.5 18,30 Z"),
-                Fill = Brushes.White
+                Width = 28,
+                Height = 22,
+                CornerRadius = new CornerRadius(4),
+                Background = new LinearGradientBrush(Color.FromRgb(248, 250, 252), Color.FromRgb(226, 232, 240), new Point(0, 0), new Point(0, 1)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(80, 255, 255, 255)),
+                BorderThickness = new Thickness(1),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Bottom,
+                Margin = new Thickness(0, 0, 0, 2),
+                Effect = new DropShadowEffect { BlurRadius = 4, ShadowDepth = 1, Direction = 270, Opacity = 0.25, Color = Colors.Black }
             };
-            g.Children.Add(notes);
+
+            Grid emblem = new Grid { Width = 12, Height = 12, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            Border r1 = new Border { Width = 5.2, Height = 5.2, CornerRadius = new CornerRadius(0.8), Background = new SolidColorBrush(Color.FromRgb(242, 80, 34)), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
+            Border r2 = new Border { Width = 5.2, Height = 5.2, CornerRadius = new CornerRadius(0.8), Background = new SolidColorBrush(Color.FromRgb(127, 186, 0)), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top };
+            Border r3 = new Border { Width = 5.2, Height = 5.2, CornerRadius = new CornerRadius(0.8), Background = new SolidColorBrush(Color.FromRgb(0, 164, 239)), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Bottom };
+            Border r4 = new Border { Width = 5.2, Height = 5.2, CornerRadius = new CornerRadius(0.8), Background = new SolidColorBrush(Color.FromRgb(255, 185, 0)), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom };
+            emblem.Children.Add(r1);
+            emblem.Children.Add(r2);
+            emblem.Children.Add(r3);
+            emblem.Children.Add(r4);
+            bag.Child = emblem;
+
+            g.Children.Add(handle);
+            g.Children.Add(bag);
             return g;
         }
 
         private static FrameworkElement BuildTerminalIcon()
         {
-            Grid g = new Grid
+            Grid g = new Grid { Width = 34, Height = 30 };
+            Border card = new Border
             {
-                Background = new LinearGradientBrush(
-                    Color.FromRgb(39, 39, 42),
-                    Color.FromRgb(9, 9, 11),
-                    new Point(0, 0),
-                    new Point(0, 1))
+                Width = 32,
+                Height = 26,
+                CornerRadius = new CornerRadius(5),
+                Background = new LinearGradientBrush(Color.FromRgb(24, 24, 28), Color.FromRgb(10, 10, 14), new Point(0, 0), new Point(0, 1)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(90, 255, 255, 255)),
+                BorderThickness = new Thickness(1),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Effect = new DropShadowEffect { BlurRadius = 4, ShadowDepth = 1, Direction = 270, Opacity = 0.3, Color = Colors.Black }
             };
-            Path prompt = new Path
+
+            StackPanel sp = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            TextBlock prompt = new TextBlock
             {
-                Data = Geometry.Parse("M 13,17 L 22,23 L 13,29 M 24,29 L 33,29"),
-                Stroke = new SolidColorBrush(Color.FromRgb(56, 189, 248)),
-                StrokeThickness = 2.4,
+                Text = ">_",
+                FontFamily = new FontFamily("Consolas, Cascadia Code, monospace"),
+                FontSize = 13,
+                FontWeight = FontWeights.Bold,
+                Foreground = new SolidColorBrush(Color.FromRgb(34, 211, 238)),
+                Margin = new Thickness(0, -1, 0, 0)
+            };
+            sp.Children.Add(prompt);
+            card.Child = sp;
+
+            g.Children.Add(card);
+            return g;
+        }
+
+        private static FrameworkElement BuildSnippingToolIcon()
+        {
+            Grid g = new Grid { Width = 34, Height = 32 };
+            Border card = new Border
+            {
+                Width = 30,
+                Height = 28,
+                CornerRadius = new CornerRadius(6),
+                Background = new LinearGradientBrush(Color.FromRgb(124, 58, 237), Color.FromRgb(79, 70, 229), new Point(0, 0), new Point(1, 1)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(80, 255, 255, 255)),
+                BorderThickness = new Thickness(1),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            Path scissors = new Path
+            {
+                Data = Geometry.Parse("M 8,11 C 6.5,11 5,12 5,13.5 C 5,15 6.5,16 8,16 C 9.5,16 11,15 11,13.5 C 11,12 9.5,11 8,11 Z M 8,18 C 6.5,18 5,19 5,20.5 C 5,22 6.5,23 8,23 C 9.5,23 11,22 11,20.5 C 11,19 9.5,18 8,18 Z M 10,14.5 L 22,22 M 10,19.5 L 22,12"),
+                Stroke = Brushes.White,
+                StrokeThickness = 1.6,
                 StrokeStartLineCap = PenLineCap.Round,
-                StrokeEndLineCap = PenLineCap.Round
+                StrokeEndLineCap = PenLineCap.Round,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
             };
-            g.Children.Add(prompt);
+            card.Child = scissors;
+            g.Children.Add(card);
+            return g;
+        }
+
+        private static FrameworkElement BuildPhotosIcon()
+        {
+            Grid g = new Grid { Width = 34, Height = 30 };
+            Border frame = new Border
+            {
+                Width = 32,
+                Height = 26,
+                CornerRadius = new CornerRadius(5),
+                Background = new LinearGradientBrush(Color.FromRgb(2, 132, 199), Color.FromRgb(3, 105, 161), new Point(0, 0), new Point(0, 1)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(80, 255, 255, 255)),
+                BorderThickness = new Thickness(1),
+                ClipToBounds = true,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            Grid inner = new Grid();
+            Ellipse sun = new Ellipse
+            {
+                Width = 7,
+                Height = 7,
+                Fill = new SolidColorBrush(Color.FromRgb(251, 191, 36)),
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(0, 4, 5, 0)
+            };
+            Path mountains = new Path
+            {
+                Data = Geometry.Parse("M 0,26 L 10,14 L 17,21 L 23,12 L 32,26 Z"),
+                Fill = new SolidColorBrush(Color.FromArgb(220, 255, 255, 255)),
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Bottom
+            };
+            inner.Children.Add(sun);
+            inner.Children.Add(mountains);
+            frame.Child = inner;
+            g.Children.Add(frame);
             return g;
         }
 
         private static FrameworkElement BuildSettingsIcon()
         {
-            Grid g = new Grid
-            {
-                Background = new LinearGradientBrush(
-                    Color.FromRgb(156, 163, 175),
-                    Color.FromRgb(75, 85, 99),
-                    new Point(0, 0),
-                    new Point(0, 1))
-            };
+            Grid g = new Grid { Width = 34, Height = 34 };
             Path gear = new Path
             {
-                Data = Geometry.Parse("M 23,10 L 25,10 L 26,13 L 28,14 L 31,12 L 32,13 L 32,16 L 34,18 L 37,17 L 37,19 L 35,21 L 35,23 L 37,25 L 37,27 L 34,26 L 32,28 L 32,31 L 31,32 L 28,30 L 26,31 L 25,34 L 23,34 L 22,31 L 20,30 L 17,32 L 16,31 L 16,28 L 14,26 L 11,27 L 11,25 L 13,23 L 13,21 L 11,19 L 11,17 L 14,18 L 16,16 L 16,13 L 17,12 L 20,14 L 22,13 Z"),
-                Fill = Brushes.White
+                Data = Geometry.Parse("M 17,4 C 18,4 18.5,5 18.7,6 L 19.8,6.5 C 20.8,5.8 21.8,6.3 22.4,7.2 L 24.1,9.8 C 24.6,10.6 24.4,11.7 23.5,12.3 L 23,13.4 C 23.8,14.2 24.8,14.6 25.8,14.4 L 26.5,15.5 C 27,16.5 27,17.5 26.5,18.5 L 25.8,19.6 C 24.8,19.4 23.8,19.8 23,20.6 L 23.5,21.7 C 24.4,22.3 24.6,23.4 24.1,24.2 L 22.4,26.8 C 21.8,27.7 20.8,28.2 19.8,27.5 L 18.7,28 C 18.5,29 18,30 17,30 C 16,30 15.5,29 15.3,28 L 14.2,27.5 C 13.2,28.2 12.2,27.7 11.6,26.8 L 9.9,24.2 C 9.4,23.4 9.6,22.3 10.5,21.7 L 11,20.6 C 10.2,19.8 9.2,19.4 8.2,19.6 L 7.5,18.5 C 7,17.5 7,16.5 7.5,15.5 L 8.2,14.4 C 9.2,14.6 10.2,14.2 11,13.4 L 10.5,12.3 C 9.6,11.7 9.4,10.6 9.9,9.8 L 11.6,7.2 C 12.2,6.3 13.2,5.8 14.2,6.5 L 15.3,6 C 15.5,5 16,4 17,4 Z"),
+                Fill = new LinearGradientBrush(Color.FromRgb(2, 132, 199), Color.FromRgb(0, 102, 204), new Point(0, 0), new Point(1, 1)),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
             };
             Ellipse hole = new Ellipse
             {
-                Width = 9,
-                Height = 9,
-                Fill = new SolidColorBrush(Color.FromRgb(75, 85, 99)),
+                Width = 8,
+                Height = 8,
+                Fill = new SolidColorBrush(Color.FromRgb(30, 30, 36)),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
             };
@@ -2252,17 +2274,42 @@ namespace Glance
             return g;
         }
 
-        private static FrameworkElement BuildTrashIcon()
+        private static FrameworkElement BuildRecycleBinIcon()
         {
-            Grid g = new Grid { Background = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)) };
-            Path can = new Path
+            Grid g = new Grid { Width = 32, Height = 34 };
+
+            Path binBody = new Path
             {
-                Data = Geometry.Parse("M 15,14 L 31,14 M 16,14 L 18,33 C 18,34 19,35 20,35 L 26,35 C 27,35 28,34 28,33 L 30,14 M 21,17 L 21.5,32 M 25,17 L 24.5,32"),
-                Stroke = Brushes.White,
-                StrokeThickness = 1.8,
-                StrokeStartLineCap = PenLineCap.Round
+                Data = Geometry.Parse("M 7,9 L 10,29 C 10.2,30.5 11.5,31.5 13,31.5 L 19,31.5 C 20.5,31.5 21.8,30.5 22,29 L 25,9 Z"),
+                Fill = new LinearGradientBrush(Color.FromArgb(170, 241, 245, 249), Color.FromArgb(120, 203, 213, 225), new Point(0, 0), new Point(0, 1)),
+                Stroke = new SolidColorBrush(Color.FromArgb(100, 255, 255, 255)),
+                StrokeThickness = 1.0
             };
-            g.Children.Add(can);
+
+            Border rim = new Border
+            {
+                Width = 22,
+                Height = 3.5,
+                CornerRadius = new CornerRadius(1.8),
+                Background = new SolidColorBrush(Color.FromArgb(200, 248, 250, 252)),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(0, 6, 0, 0)
+            };
+
+            TextBlock recycleSymbol = new TextBlock
+            {
+                Text = "♻",
+                FontSize = 13,
+                Foreground = new SolidColorBrush(Color.FromRgb(16, 185, 129)),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 7, 0, 0)
+            };
+
+            g.Children.Add(binBody);
+            g.Children.Add(rim);
+            g.Children.Add(recycleSymbol);
             return g;
         }
     }
