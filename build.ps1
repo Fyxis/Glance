@@ -1,39 +1,30 @@
 $ErrorActionPreference = 'Stop'
-$csc = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
-$fw = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319"
-$wpf = "$fw\WPF"
-$winmd = "C:\Windows\System32\WinMetadata"
+
+# Locate dotnet executable
+$dotnet = $null
+if (Test-Path "$HOME\.dotnet\dotnet.exe") {
+    $dotnet = "$HOME\.dotnet\dotnet.exe"
+} elseif (Get-Command "dotnet" -ErrorAction SilentlyContinue) {
+    $dotnet = "dotnet"
+} elseif (Test-Path "C:\Program Files\dotnet\dotnet.exe") {
+    $dotnet = "C:\Program Files\dotnet\dotnet.exe"
+} else {
+    throw "dotnet SDK 8.0+ not found. Please install .NET 8 SDK."
+}
 
 Stop-Process -Name Glance, GlanceSetup, DynamicIsland, DynamicIslandSetup -Force -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 300
 
-Write-Host "1. Compiling Native Glance.exe..." -ForegroundColor Cyan
-& $csc /nologo /target:winexe /out:"$PSScriptRoot\Glance.exe" /win32icon:"$PSScriptRoot\src\app.ico" `
-  /r:"$wpf\PresentationFramework.dll" `
-  /r:"$wpf\PresentationCore.dll" `
-  /r:"$wpf\WindowsBase.dll" `
-  /r:"$fw\System.Xaml.dll" `
-  /r:"$fw\System.Drawing.dll" `
-  /r:"$fw\System.Windows.Forms.dll" `
-  /r:"$fw\System.Web.Extensions.dll" `
-  /r:"$fw\System.Management.dll" `
-  /r:"$fw\System.Runtime.dll" `
-  /r:"$winmd\Windows.Foundation.winmd" `
-  /r:"$winmd\Windows.Media.winmd" `
-  /r:"$winmd\Windows.Storage.winmd" `
-  "$PSScriptRoot\src\GlanceApp.cs"
+$tempGlancePublish = Join-Path $PSScriptRoot "bin\publish-glance"
+$tempSetupPublish = Join-Path $PSScriptRoot "bin\publish-setup"
 
-Write-Host "2. Compiling Standalone GlanceSetup.exe Installer..." -ForegroundColor Cyan
-& $csc /nologo /target:winexe /out:"$PSScriptRoot\GlanceSetup.exe" `
-  /win32icon:"$PSScriptRoot\src\app.ico" `
-  /resource:"$PSScriptRoot\Glance.exe",Glance.exe `
-  /r:"$wpf\PresentationFramework.dll" `
-  /r:"$wpf\PresentationCore.dll" `
-  /r:"$wpf\WindowsBase.dll" `
-  /r:"$fw\System.Xaml.dll" `
-  /r:"$fw\System.Drawing.dll" `
-  /r:"$fw\System.Windows.Forms.dll" `
-  "$PSScriptRoot\src\SetupInstaller.cs"
+Write-Host "1. Compiling & Publishing Native .NET 8 Glance.exe..." -ForegroundColor Cyan
+& $dotnet publish "$PSScriptRoot\Glance.csproj" -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o $tempGlancePublish
+Copy-Item "$tempGlancePublish\Glance.exe" "$PSScriptRoot\Glance.exe" -Force
+
+Write-Host "2. Compiling & Publishing Standalone GlanceSetup.exe Installer..." -ForegroundColor Cyan
+& $dotnet publish "$PSScriptRoot\GlanceSetup.csproj" -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o $tempSetupPublish
+Copy-Item "$tempSetupPublish\GlanceSetup.exe" "$PSScriptRoot\GlanceSetup.exe" -Force
 
 # Update installed copy if present
 $installedGlanceDir = Join-Path $env:LOCALAPPDATA "Programs\Glance"
@@ -45,4 +36,7 @@ if (Test-Path $installedLegacyDir) {
     Copy-Item "$PSScriptRoot\Glance.exe" (Join-Path $installedLegacyDir "DynamicIsland.exe") -Force
 }
 
-Write-Host "Done! Glance.exe and GlanceSetup.exe compiled successfully." -ForegroundColor Green
+# Clean temporary folders
+Remove-Item -Recurse -Force $tempGlancePublish, $tempSetupPublish -ErrorAction SilentlyContinue
+
+Write-Host "Done! Glance.exe and GlanceSetup.exe compiled successfully with .NET 8." -ForegroundColor Green

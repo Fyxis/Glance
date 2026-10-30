@@ -6,13 +6,16 @@ using System.IO;
 using System.Linq;
 using System.Management;
 using System.Net;
+using System.Net.Http;
 using System.Net.NetworkInformation;
+using System.Runtime;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Web.Script.Serialization;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -29,6 +32,8 @@ using Windows.Media.Control;
 using Windows.Storage.Streams;
 using Forms = System.Windows.Forms;
 using Path = System.Windows.Shapes.Path;
+using Point = System.Windows.Point;
+using Size = System.Windows.Size;
 
 namespace Glance
 {
@@ -45,6 +50,39 @@ namespace Glance
         public string text { get; set; }
         public string time { get; set; }
         public bool pinned { get; set; }
+    }
+
+    public class LrcSearchItem
+    {
+        public string syncedLyrics { get; set; }
+        public string plainLyrics { get; set; }
+    }
+
+    public class JsonHelper
+    {
+        private static readonly JsonSerializerOptions Options = new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true,
+            WriteIndented = false
+        };
+
+        public string Serialize<T>(T obj)
+        {
+            return JsonSerializer.Serialize(obj, Options);
+        }
+
+        public T Deserialize<T>(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return default(T);
+            try
+            {
+                return JsonSerializer.Deserialize<T>(text, Options);
+            }
+            catch
+            {
+                return default(T);
+            }
+        }
     }
 
     public class ShelfItem
@@ -649,9 +687,10 @@ namespace Glance
                     lastTrim = DateTime.UtcNow;
                 }
 
-                GC.Collect(2, GCCollectionMode.Forced, true);
+                GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
+                GC.Collect(2, GCCollectionMode.Forced, true, true);
                 GC.WaitForPendingFinalizers();
-                GC.Collect(2, GCCollectionMode.Forced, true);
+                GC.Collect(2, GCCollectionMode.Forced, true, true);
 
                 IntPtr handle = NativeMethods.GetCurrentProcess();
                 NativeMethods.SetProcessWorkingSetSize(handle, new IntPtr(-1), new IntPtr(-1));
@@ -2687,11 +2726,11 @@ namespace Glance
         private List<NoteItem> notesList = new List<NoteItem>();
         private List<ClipItem> clipList = new List<ClipItem>();
         private string lastClipboardText = "";
-        private JavaScriptSerializer json = new JavaScriptSerializer();
+        private JsonHelper json = new JsonHelper();
+        private static readonly HttpClient http = new HttpClient { Timeout = TimeSpan.FromSeconds(6) };
 
         public MainWindow(Forms.Screen targetScreen = null, bool isCompanion = false)
         {
-            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls;
 
             IsCompanionWindow = isCompanion;
             if (!isCompanion)
@@ -3095,8 +3134,8 @@ namespace Glance
                     };
                     startupTrimTimer2.Start();
 
-                    // Periodic background memory trimmer (every 6 seconds when collapsed/idle)
-                    var maintenanceTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(6.0) };
+                    // Periodic background memory trimmer (every 5 seconds when collapsed/idle)
+                    var maintenanceTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5.0) };
                     maintenanceTimer.Tick += (s, ev) =>
                     {
                         bool anyExpanded = isExpanded || (CompanionInstance != null && CompanionInstance.isExpanded);
@@ -5844,40 +5883,46 @@ namespace Glance
 
                 try
                 {
-                    HttpWebRequest req = (HttpWebRequest)WebRequest.Create(url);
-                    req.UserAgent = "Glance/1.0";
-                    req.Timeout = 6000;
-                    using (HttpWebResponse resp = (HttpWebResponse)req.GetResponse())
-                    using (StreamReader sr = new StreamReader(resp.GetResponseStream(), Encoding.UTF8))
+                    using (var req = new HttpRequestMessage(HttpMethod.Get, url))
                     {
-                        string body = sr.ReadToEnd();
-                        var items = json.Deserialize<List<Dictionary<string, object>>>(body);
-                        if (items != null && items.Count > 0)
+                        req.Headers.TryAddWithoutValidation("User-Agent", "Glance/1.0");
+                        using (var resp = http.Send(req))
                         {
-                            var best = items.FirstOrDefault(x => x.ContainsKey("syncedLyrics") && x["syncedLyrics"] is string && !string.IsNullOrWhiteSpace((string)x["syncedLyrics"]))
-                                       ?? items[0];
-
-                            if (best.ContainsKey("syncedLyrics") && best["syncedLyrics"] is string)
+                            if (resp.IsSuccessStatusCode)
                             {
-                                string rawSynced = (string)best["syncedLyrics"];
-                                foreach (string line in rawSynced.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+                                using (var sr = new StreamReader(resp.Content.ReadAsStream(), Encoding.UTF8))
                                 {
-                                    Match m = Regex.Match(line, @"^\[(\d+):(\d+(?:\.\d+)?)\]\s*(.*)$");
-                                    if (m.Success)
+                                    string body = sr.ReadToEnd();
+                                    var items = json.Deserialize<List<LrcSearchItem>>(body);
+                                    if (items != null && items.Count > 0)
                                     {
-                                        double sec = int.Parse(m.Groups[1].Value) * 60.0 + double.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture);
-                                        string txt = m.Groups[3].Value.Trim();
-                                        if (!string.IsNullOrEmpty(txt))
+                                        var best = items.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x.syncedLyrics))
+                                                   ?? items[0];
+
+                                        if (!string.IsNullOrWhiteSpace(best.syncedLyrics))
                                         {
-                                            parsedSynced.Add(new LyricLine { TimeSec = sec, Text = txt });
+                                            string rawSynced = best.syncedLyrics;
+                                            foreach (string line in rawSynced.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+                                            {
+                                                Match m = Regex.Match(line, @"^\[(\d+):(\d+(?:\.\d+)?)\]\s*(.*)$");
+                                                if (m.Success)
+                                                {
+                                                    double sec = int.Parse(m.Groups[1].Value) * 60.0 + double.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture);
+                                                    string txt = m.Groups[3].Value.Trim();
+                                                    if (!string.IsNullOrEmpty(txt))
+                                                    {
+                                                        parsedSynced.Add(new LyricLine { TimeSec = sec, Text = txt });
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        else if (!string.IsNullOrWhiteSpace(best.plainLyrics))
+                                        {
+                                            string rawPlain = best.plainLyrics;
+                                            parsedPlain.AddRange(rawPlain.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries));
                                         }
                                     }
                                 }
-                            }
-                            else if (best.ContainsKey("plainLyrics") && best["plainLyrics"] is string)
-                            {
-                                string rawPlain = (string)best["plainLyrics"];
-                                parsedPlain.AddRange(rawPlain.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries));
                             }
                         }
                     }
@@ -6124,7 +6169,7 @@ namespace Glance
                 }
                 catch { }
 
-                Thread.Sleep((!isExpanded && !isMusicMode) ? 450 : 300);
+                Thread.Sleep((!isExpanded && !isMusicMode) ? 750 : 300);
             }
         }
 
