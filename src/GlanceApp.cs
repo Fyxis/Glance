@@ -799,6 +799,93 @@ namespace Glance
         [DllImport("user32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool RemoveClipboardFormatListener(IntPtr hwnd);
+
+        public const int SW_HIDE = 0;
+        public const int SW_SHOWNORMAL = 1;
+        public const int SW_SHOWMINIMIZED = 2;
+        public const int SW_SHOWMAXIMIZED = 3;
+        public const int SW_SHOW = 5;
+        public const int SW_MINIMIZE = 6;
+        public const int SW_RESTORE = 9;
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool IsIconic(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool SetForegroundWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        public static extern bool BringWindowToTop(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        public static extern IntPtr GetForegroundWindow();
+
+        [DllImport("user32.dll")]
+        public static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
+
+        [DllImport("kernel32.dll")]
+        public static extern uint GetCurrentThreadId();
+
+        public static void RestoreAndBringToFront(IntPtr hWnd)
+        {
+            if (hWnd == IntPtr.Zero) return;
+            try
+            {
+                if (IsIconic(hWnd))
+                {
+                    ShowWindow(hWnd, SW_RESTORE);
+                }
+                else
+                {
+                    ShowWindow(hWnd, SW_SHOW);
+                }
+
+                IntPtr fgWnd = GetForegroundWindow();
+                uint fgThread = GetWindowThreadProcessId(fgWnd, out _);
+                uint appThread = GetCurrentThreadId();
+                uint targetThread = GetWindowThreadProcessId(hWnd, out _);
+
+                bool attachedFg = false;
+                bool attachedTarget = false;
+
+                if (fgThread != 0 && fgThread != appThread)
+                {
+                    attachedFg = AttachThreadInput(appThread, fgThread, true);
+                }
+                if (targetThread != 0 && targetThread != appThread)
+                {
+                    attachedTarget = AttachThreadInput(appThread, targetThread, true);
+                }
+
+                try
+                {
+                    keybd_event(0x12 /* VK_MENU */, 0, 0, UIntPtr.Zero);
+                    keybd_event(0x12, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+
+                    BringWindowToTop(hWnd);
+                    SetForegroundWindow(hWnd);
+                }
+                finally
+                {
+                    if (attachedFg) AttachThreadInput(appThread, fgThread, false);
+                    if (attachedTarget) AttachThreadInput(appThread, targetThread, false);
+                }
+            }
+            catch
+            {
+                try
+                {
+                    ShowWindow(hWnd, SW_RESTORE);
+                    SetForegroundWindow(hWnd);
+                }
+                catch { }
+            }
+        }
     }
 
     public static class MemoryOptimizer
@@ -1753,7 +1840,11 @@ namespace Glance
             {
                 ItemModel = item,
                 Title = item.Title,
-                OnClick = () => DockIconHelper.LaunchDockItem(item, parentWindow),
+                OnClick = () =>
+                {
+                    bool isShift = (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift;
+                    DockIconHelper.LaunchDockItem(item, parentWindow, forceNew: isShift);
+                },
                 ProcessNameMatch = item.ProcessMatch,
                 Width = 50,
                 Height = 58,
@@ -1878,6 +1969,22 @@ namespace Glance
 
             if (!item.IsSeparator)
             {
+                if (!item.TargetPath.StartsWith("start:", StringComparison.OrdinalIgnoreCase) &&
+                    !item.TargetPath.StartsWith("taskview:", StringComparison.OrdinalIgnoreCase) &&
+                    !item.TargetPath.StartsWith("glance:", StringComparison.OrdinalIgnoreCase))
+                {
+                    MenuItem mNewWin = new MenuItem
+                    {
+                        Header = $"🗔  Open New Window",
+                        Foreground = Brushes.White,
+                        Padding = new Thickness(8, 5, 12, 5),
+                        Cursor = Cursors.Hand
+                    };
+                    mNewWin.Click += (s, e) => DockIconHelper.LaunchNewInstance(item);
+                    cm.Items.Add(mNewWin);
+                    cm.Items.Add(new Separator { Background = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)) });
+                }
+
                 MenuItem mEdit = new MenuItem
                 {
                     Header = $"✏️  Edit '{item.Title}' (App & Icon)...",
@@ -2330,7 +2437,173 @@ namespace Glance
             }
         }
 
-        public static void LaunchDockItem(DockCustomItem item, MainWindow parentWindow)
+        public static List<IntPtr> FindExistingWindows(DockCustomItem item)
+        {
+            var result = new List<IntPtr>();
+            if (item == null || item.IsSeparator) return result;
+
+            string target = (item.TargetPath ?? "").Trim();
+            string procMatch = (item.ProcessMatch ?? "").Trim();
+            string iconType = (item.IconType ?? "").Trim();
+            string title = (item.Title ?? "").Trim();
+
+            bool isExplorer = iconType.Equals("explorer", StringComparison.OrdinalIgnoreCase) ||
+                              target.Equals("explorer.exe", StringComparison.OrdinalIgnoreCase) ||
+                              procMatch.Equals("explorer", StringComparison.OrdinalIgnoreCase);
+
+            bool isRecycleBin = iconType.Equals("recyclebin", StringComparison.OrdinalIgnoreCase) ||
+                                target.IndexOf("RecycleBinFolder", StringComparison.OrdinalIgnoreCase) >= 0;
+
+            var procCandidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (!string.IsNullOrEmpty(procMatch))
+            {
+                foreach (var p in procMatch.Split(new[] { '|', ',', ';' }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    procCandidates.Add(p.Trim());
+                }
+            }
+
+            if (!string.IsNullOrEmpty(target))
+            {
+                try
+                {
+                    if (target.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                    {
+                        procCandidates.Add(System.IO.Path.GetFileNameWithoutExtension(target));
+                    }
+                    else if (target.StartsWith("spotify:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        procCandidates.Add("Spotify");
+                    }
+                    else if (target.StartsWith("microsoft-edge:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        procCandidates.Add("msedge");
+                    }
+                    else if (target.StartsWith("ms-windows-store:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        procCandidates.Add("WinStore.App");
+                    }
+                    else if (target.StartsWith("ms-photos:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        procCandidates.Add("Microsoft.Photos");
+                    }
+                    else if (target.StartsWith("ms-screenclip:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        procCandidates.Add("SnippingTool");
+                        procCandidates.Add("ScreenClippingHost");
+                    }
+                }
+                catch { }
+            }
+
+            if (iconType.Equals("spotify", StringComparison.OrdinalIgnoreCase)) procCandidates.Add("Spotify");
+            if (iconType.Equals("browser", StringComparison.OrdinalIgnoreCase)) { procCandidates.Add("msedge"); procCandidates.Add("chrome"); }
+            if (iconType.Equals("terminal", StringComparison.OrdinalIgnoreCase)) { procCandidates.Add("WindowsTerminal"); procCandidates.Add("powershell"); procCandidates.Add("cmd"); }
+            if (iconType.Equals("notes", StringComparison.OrdinalIgnoreCase)) procCandidates.Add("Notepad");
+            if (iconType.Equals("calc", StringComparison.OrdinalIgnoreCase)) { procCandidates.Add("CalculatorApp"); procCandidates.Add("Calculator"); }
+            if (iconType.Equals("code", StringComparison.OrdinalIgnoreCase)) procCandidates.Add("Code");
+            if (iconType.Equals("chat", StringComparison.OrdinalIgnoreCase)) { procCandidates.Add("Discord"); procCandidates.Add("Telegram"); }
+
+            int currentPid = Process.GetCurrentProcess().Id;
+
+            NativeMethods.EnumWindows((hWnd, lParam) =>
+            {
+                try
+                {
+                    if (!NativeMethods.IsWindowVisible(hWnd) && !NativeMethods.IsIconic(hWnd))
+                        return true;
+
+                    int cloaked = 0;
+                    NativeMethods.DwmGetWindowAttribute(hWnd, NativeMethods.DWMWA_CLOAKED, out cloaked, sizeof(int));
+                    if (cloaked != 0) return true;
+
+                    int exStyle = NativeMethods.GetWindowLong(hWnd, NativeMethods.GWL_EXSTYLE);
+                    if ((exStyle & NativeMethods.WS_EX_TOOLWINDOW) != 0 && (exStyle & NativeMethods.WS_EX_APPWINDOW) == 0)
+                        return true;
+
+                    StringBuilder sbClass = new StringBuilder(256);
+                    NativeMethods.GetClassName(hWnd, sbClass, 256);
+                    string cls = sbClass.ToString();
+
+                    if (cls == "Progman" || cls == "WorkerW" || cls == "Shell_TrayWnd" || cls == "Shell_SecondaryTrayWnd")
+                        return true;
+
+                    if (isRecycleBin)
+                    {
+                        if (cls.Equals("CabinetWClass", StringComparison.OrdinalIgnoreCase))
+                        {
+                            StringBuilder sbTitle = new StringBuilder(512);
+                            NativeMethods.GetWindowText(hWnd, sbTitle, 512);
+                            string wTitle = sbTitle.ToString();
+                            if (wTitle.IndexOf("Recycle", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                wTitle.IndexOf("Sampah", StringComparison.OrdinalIgnoreCase) >= 0)
+                            {
+                                result.Add(hWnd);
+                            }
+                        }
+                        return true;
+                    }
+
+                    if (isExplorer)
+                    {
+                        if (cls.Equals("CabinetWClass", StringComparison.OrdinalIgnoreCase))
+                        {
+                            result.Add(hWnd);
+                        }
+                        return true;
+                    }
+
+                    uint pid;
+                    NativeMethods.GetWindowThreadProcessId(hWnd, out pid);
+                    if (pid == 0 || pid == currentPid) return true;
+
+                    string procName = null;
+                    try
+                    {
+                        var proc = Process.GetProcessById((int)pid);
+                        procName = proc.ProcessName;
+                    }
+                    catch { }
+
+                    if (string.IsNullOrEmpty(procName)) return true;
+
+                    if (procName.Equals("ApplicationFrameHost", StringComparison.OrdinalIgnoreCase))
+                    {
+                        StringBuilder sbTitle = new StringBuilder(512);
+                        NativeMethods.GetWindowText(hWnd, sbTitle, 512);
+                        string wTitle = sbTitle.ToString().Trim();
+                        if (!string.IsNullOrEmpty(wTitle))
+                        {
+                            if ((!string.IsNullOrEmpty(title) && wTitle.IndexOf(title, StringComparison.OrdinalIgnoreCase) >= 0) ||
+                                procCandidates.Any(c => wTitle.IndexOf(c, StringComparison.OrdinalIgnoreCase) >= 0))
+                            {
+                                result.Add(hWnd);
+                            }
+                        }
+                        return true;
+                    }
+
+                    if (procCandidates.Any(c => procName.Equals(c, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        StringBuilder sbTitle = new StringBuilder(512);
+                        NativeMethods.GetWindowText(hWnd, sbTitle, 512);
+                        string wTitle = sbTitle.ToString().Trim();
+
+                        if (!string.IsNullOrEmpty(wTitle) || NativeMethods.IsIconic(hWnd))
+                        {
+                            result.Add(hWnd);
+                        }
+                    }
+                }
+                catch { }
+
+                return true;
+            }, IntPtr.Zero);
+
+            return result;
+        }
+
+        public static void LaunchDockItem(DockCustomItem item, MainWindow parentWindow, bool forceNew = false)
         {
             if (item == null || item.IsSeparator) return;
 
@@ -2357,6 +2630,34 @@ namespace Glance
                 parentWindow?.OpenSettingsDialog();
                 return;
             }
+
+            if (!forceNew)
+            {
+                var existing = FindExistingWindows(item);
+                if (existing != null && existing.Count > 0)
+                {
+                    IntPtr fg = NativeMethods.GetForegroundWindow();
+                    IntPtr targetWnd = existing[0];
+
+                    if (existing.Count > 1 && existing[0] == fg)
+                    {
+                        targetWnd = existing[1];
+                    }
+
+                    NativeMethods.RestoreAndBringToFront(targetWnd);
+                    return;
+                }
+            }
+
+            LaunchNewInstance(item);
+        }
+
+        public static void LaunchNewInstance(DockCustomItem item)
+        {
+            if (item == null || item.IsSeparator) return;
+            string target = (item.TargetPath ?? "").Trim();
+            if (string.IsNullOrEmpty(target)) return;
+
             if (target.Equals("shell:RecycleBinFolder", StringComparison.OrdinalIgnoreCase))
             {
                 try { Process.Start(new ProcessStartInfo("explorer.exe", "shell:RecycleBinFolder") { UseShellExecute = true }); } catch { }
