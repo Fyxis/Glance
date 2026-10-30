@@ -122,6 +122,8 @@ namespace Glance
 
         public bool isSearchInstalled { get; set; } = true;
         public bool isSearchEnabled { get; set; } = true;
+        public bool isDockInstalled { get; set; } = true;
+        public bool isDockEnabled { get; set; } = true;
 
         public AppConfig()
         {
@@ -148,6 +150,8 @@ namespace Glance
 
             isSearchInstalled = true;
             isSearchEnabled = true;
+            isDockInstalled = true;
+            isDockEnabled = true;
         }
     }
 
@@ -611,6 +615,7 @@ namespace Glance
     {
         public const int GWL_EXSTYLE = -20;
         public const int WS_EX_TOOLWINDOW = 0x00000080;
+        public const int WS_EX_NOACTIVATE = 0x08000000;
         public const int WM_HOTKEY = 0x0312;
         public const uint MOD_ALT = 0x0001;
         public const uint MOD_CONTROL = 0x0002;
@@ -1473,6 +1478,795 @@ namespace Glance
         }
     }
 
+    // =======================================================
+    // MACOS DYNAMIC DOCK (FLOATING TASKBAR WITH MAGNIFICATION)
+    // =======================================================
+    public class DockItemControl : Grid
+    {
+        public string Title { get; set; }
+        public Action OnClick { get; set; }
+        public string ProcessNameMatch { get; set; }
+        public bool IsSeparator { get; set; }
+
+        public Border IconBorder { get; set; }
+        public Ellipse RunningDot { get; set; }
+        public ScaleTransform ScaleTrans { get; set; }
+        public TranslateTransform TranslateTrans { get; set; }
+    }
+
+    public class MacDockWindow : Window
+    {
+        private MainWindow parentWindow;
+        private Border dockPill;
+        private StackPanel itemsPanel;
+        private Canvas tooltipCanvas;
+        private Border tooltipBorder;
+        private TextBlock tooltipText;
+        private List<DockItemControl> dockControls = new List<DockItemControl>();
+        private DispatcherTimer runningCheckTimer;
+
+        public MacDockWindow(MainWindow owner = null)
+        {
+            parentWindow = owner;
+            Title = "Glance Dock";
+            WindowStyle = WindowStyle.None;
+            AllowsTransparency = true;
+            Background = null;
+            Topmost = true;
+            ShowInTaskbar = false;
+            ResizeMode = ResizeMode.NoResize;
+            SnapsToDevicePixels = true;
+            Height = 125;
+            Width = 760;
+
+            BuildDockUI();
+
+            Loaded += (s, e) =>
+            {
+                try
+                {
+                    IntPtr hwnd = new WindowInteropHelper(this).Handle;
+                    int exStyle = NativeMethods.GetWindowLong(hwnd, NativeMethods.GWL_EXSTYLE);
+                    NativeMethods.SetWindowLong(hwnd, NativeMethods.GWL_EXSTYLE, exStyle | NativeMethods.WS_EX_TOOLWINDOW | NativeMethods.WS_EX_NOACTIVATE);
+                }
+                catch { }
+
+                Reposition();
+                StartRunningAppCheckTimer();
+            };
+
+            Closed += (s, e) =>
+            {
+                if (runningCheckTimer != null) runningCheckTimer.Stop();
+            };
+        }
+
+        private void BuildDockUI()
+        {
+            Grid root = new Grid { ClipToBounds = false };
+
+            // Floating Tooltip above icons
+            tooltipCanvas = new Canvas { IsHitTestVisible = false };
+            tooltipBorder = new Border
+            {
+                CornerRadius = new CornerRadius(7),
+                Background = new SolidColorBrush(Color.FromArgb(220, 20, 20, 24)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(60, 255, 255, 255)),
+                BorderThickness = new Thickness(1),
+                Padding = new Thickness(9, 3, 9, 4),
+                Visibility = Visibility.Collapsed,
+                Effect = new DropShadowEffect { BlurRadius = 14, ShadowDepth = 3, Direction = 270, Opacity = 0.45, Color = Colors.Black }
+            };
+            tooltipText = new TextBlock
+            {
+                Foreground = Brushes.White,
+                FontSize = 11.5,
+                FontWeight = FontWeights.SemiBold,
+                HorizontalAlignment = HorizontalAlignment.Center
+            };
+            tooltipBorder.Child = tooltipText;
+            tooltipCanvas.Children.Add(tooltipBorder);
+
+            // Frosted macOS Dock Pill Container
+            dockPill = new Border
+            {
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Bottom,
+                Margin = new Thickness(0, 0, 0, 8),
+                Height = 64,
+                CornerRadius = new CornerRadius(20),
+                Background = new SolidColorBrush(Color.FromArgb(170, 24, 25, 30)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(70, 255, 255, 255)),
+                BorderThickness = new Thickness(1),
+                ClipToBounds = false,
+                Effect = new DropShadowEffect
+                {
+                    BlurRadius = 32,
+                    ShadowDepth = 6,
+                    Direction = 270,
+                    Opacity = 0.45,
+                    Color = Colors.Black
+                }
+            };
+
+            itemsPanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                VerticalAlignment = VerticalAlignment.Bottom,
+                Margin = new Thickness(12, 0, 12, 6),
+                ClipToBounds = false
+            };
+
+            // Register dock items (10 Apps + Separator + Trash)
+            AddAppItem("Finder", () => LaunchFinder(), "explorer", BuildFinderIcon());
+            AddAppItem("Launchpad", () => parentWindow?.ToggleSpotlightSearch(), "Glance", BuildLaunchpadIcon());
+            AddAppItem("Safari", () => LaunchBrowser(), "chrome|msedge|firefox|brave", BuildBrowserIcon());
+            AddAppItem("Messages", () => LaunchChat(), "Discord|WhatsApp|Telegram", BuildMessagesIcon());
+            AddAppItem("FaceTime", () => LaunchCamera(), "Camera|Teams|Zoom", BuildFaceTimeIcon());
+            AddAppItem("Mail", () => LaunchMail(), "HxOutlook|Outlook", BuildMailIcon());
+            AddAppItem("Photos", () => LaunchPhotos(), "Microsoft.Photos", BuildPhotosIcon());
+            AddAppItem("Music", () => LaunchMusic(), "Spotify", BuildMusicIcon());
+            AddAppItem("Terminal", () => LaunchTerminal(), "WindowsTerminal|cmd|powershell", BuildTerminalIcon());
+            AddAppItem("System Settings", () => parentWindow?.OpenSettingsDialog(), "SystemSettings", BuildSettingsIcon());
+            AddSeparator();
+            AddAppItem("Trash", () => LaunchTrash(), "", BuildTrashIcon());
+
+            dockPill.Child = itemsPanel;
+            dockPill.PreviewMouseMove += OnDockMouseMove;
+            dockPill.MouseLeave += OnDockMouseLeave;
+
+            root.Children.Add(dockPill);
+            root.Children.Add(tooltipCanvas);
+            Content = root;
+        }
+
+        private void AddAppItem(string title, Action onClick, string processMatch, FrameworkElement iconElement)
+        {
+            DockItemControl ctrl = new DockItemControl
+            {
+                Title = title,
+                OnClick = onClick,
+                ProcessNameMatch = processMatch,
+                Width = 52,
+                Height = 62,
+                Margin = new Thickness(2, 0, 2, 0),
+                ClipToBounds = false
+            };
+
+            ctrl.RowDefinitions.Add(new RowDefinition { Height = new GridLength(48) });
+            ctrl.RowDefinitions.Add(new RowDefinition { Height = new GridLength(8) });
+
+            ctrl.ScaleTrans = new ScaleTransform(1.0, 1.0);
+            ctrl.TranslateTrans = new TranslateTransform(0.0, 0.0);
+            TransformGroup tg = new TransformGroup();
+            tg.Children.Add(ctrl.ScaleTrans);
+            tg.Children.Add(ctrl.TranslateTrans);
+
+            ctrl.IconBorder = new Border
+            {
+                Width = 46,
+                Height = 46,
+                CornerRadius = new CornerRadius(12),
+                ClipToBounds = true,
+                Cursor = Cursors.Hand,
+                RenderTransformOrigin = new Point(0.5, 1.0),
+                RenderTransform = tg,
+                Child = iconElement,
+                Effect = new DropShadowEffect
+                {
+                    BlurRadius = 8,
+                    ShadowDepth = 2,
+                    Direction = 270,
+                    Opacity = 0.28,
+                    Color = Colors.Black
+                }
+            };
+            Grid.SetRow(ctrl.IconBorder, 0);
+
+            ctrl.RunningDot = new Ellipse
+            {
+                Width = 4,
+                Height = 4,
+                Fill = new SolidColorBrush(Color.FromArgb(220, 255, 255, 255)),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Visibility = Visibility.Hidden
+            };
+            Grid.SetRow(ctrl.RunningDot, 1);
+
+            ctrl.Children.Add(ctrl.IconBorder);
+            ctrl.Children.Add(ctrl.RunningDot);
+
+            ctrl.MouseLeftButtonUp += (s, e) =>
+            {
+                e.Handled = true;
+                AnimateItemBounce(ctrl, () => ctrl.OnClick?.Invoke());
+            };
+
+            dockControls.Add(ctrl);
+            itemsPanel.Children.Add(ctrl);
+        }
+
+        private void AddSeparator()
+        {
+            DockItemControl ctrl = new DockItemControl
+            {
+                IsSeparator = true,
+                Width = 14,
+                Height = 62,
+                Margin = new Thickness(2, 0, 2, 0)
+            };
+
+            Border line = new Border
+            {
+                Width = 1,
+                Height = 34,
+                Background = new SolidColorBrush(Color.FromArgb(50, 255, 255, 255)),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+            ctrl.Children.Add(line);
+            dockControls.Add(ctrl);
+            itemsPanel.Children.Add(ctrl);
+        }
+
+        private void OnDockMouseMove(object sender, MouseEventArgs e)
+        {
+            Point mousePos = e.GetPosition(itemsPanel);
+            double mouseX = mousePos.X;
+            double maxScale = 1.55;
+            double radius = 125.0;
+
+            DockItemControl closestItem = null;
+            double minDistance = double.MaxValue;
+
+            for (int i = 0; i < dockControls.Count; i++)
+            {
+                var ctrl = dockControls[i];
+                if (ctrl.IsSeparator) continue;
+
+                Point itemOrigin = ctrl.TransformToAncestor(itemsPanel).Transform(new Point(ctrl.ActualWidth / 2.0, 0));
+                double dist = Math.Abs(mouseX - itemOrigin.X);
+
+                if (dist < minDistance)
+                {
+                    minDistance = dist;
+                    closestItem = ctrl;
+                }
+
+                if (dist < radius)
+                {
+                    double factor = Math.Cos((dist / radius) * (Math.PI / 2.0));
+                    double scale = 1.0 + (maxScale - 1.0) * factor * factor;
+                    double translateY = -(scale - 1.0) * 26.0;
+
+                    ctrl.ScaleTrans.ScaleX = scale;
+                    ctrl.ScaleTrans.ScaleY = scale;
+                    ctrl.TranslateTrans.Y = translateY;
+                }
+                else
+                {
+                    ctrl.ScaleTrans.ScaleX = 1.0;
+                    ctrl.ScaleTrans.ScaleY = 1.0;
+                    ctrl.TranslateTrans.Y = 0.0;
+                }
+            }
+
+            if (closestItem != null && minDistance < 46.0)
+            {
+                ShowTooltip(closestItem);
+            }
+            else
+            {
+                HideTooltip();
+            }
+        }
+
+        private void OnDockMouseLeave(object sender, MouseEventArgs e)
+        {
+            HideTooltip();
+            var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+            var dur = TimeSpan.FromMilliseconds(160);
+
+            foreach (var ctrl in dockControls)
+            {
+                if (ctrl.IsSeparator) continue;
+                ctrl.ScaleTrans.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(1.0, dur) { EasingFunction = ease });
+                ctrl.ScaleTrans.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(1.0, dur) { EasingFunction = ease });
+                ctrl.TranslateTrans.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(0.0, dur) { EasingFunction = ease });
+            }
+        }
+
+        private void ShowTooltip(DockItemControl item)
+        {
+            if (item == null || string.IsNullOrEmpty(item.Title))
+            {
+                HideTooltip();
+                return;
+            }
+
+            tooltipText.Text = item.Title;
+            tooltipBorder.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            double tipW = tooltipBorder.DesiredSize.Width;
+
+            Point pos = item.TransformToAncestor(this).Transform(new Point(item.ActualWidth / 2.0, 0));
+            double targetX = pos.X - (tipW / 2.0);
+            double targetY = pos.Y + item.TranslateTrans.Y - 26.0;
+
+            Canvas.SetLeft(tooltipBorder, Math.Max(4, Math.Min(Width - tipW - 4, targetX)));
+            Canvas.SetTop(tooltipBorder, Math.Max(2, targetY));
+            tooltipBorder.Visibility = Visibility.Visible;
+        }
+
+        private void HideTooltip()
+        {
+            tooltipBorder.Visibility = Visibility.Collapsed;
+        }
+
+        private void AnimateItemBounce(DockItemControl item, Action onComplete)
+        {
+            double curY = item.TranslateTrans.Y;
+            var bounceAnim = new DoubleAnimationUsingKeyFrames();
+            bounceAnim.KeyFrames.Add(new LinearDoubleKeyFrame(curY, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(0))));
+            bounceAnim.KeyFrames.Add(new SplineDoubleKeyFrame(curY - 22, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(80))));
+            bounceAnim.KeyFrames.Add(new SplineDoubleKeyFrame(curY, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(160))));
+            bounceAnim.KeyFrames.Add(new SplineDoubleKeyFrame(curY - 11, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(230))));
+            bounceAnim.KeyFrames.Add(new SplineDoubleKeyFrame(curY, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(300))));
+            bounceAnim.Completed += (s, e) => onComplete?.Invoke();
+            item.TranslateTrans.BeginAnimation(TranslateTransform.YProperty, bounceAnim);
+        }
+
+        public void Reposition()
+        {
+            try
+            {
+                var screen = parentWindow?.TargetScreen ?? Forms.Screen.PrimaryScreen;
+                var bounds = screen.WorkingArea;
+
+                double dpiScaleX = 1.0;
+                double dpiScaleY = 1.0;
+                PresentationSource source = PresentationSource.FromVisual(this);
+                if (source != null && source.CompositionTarget != null)
+                {
+                    dpiScaleX = source.CompositionTarget.TransformToDevice.M11;
+                    dpiScaleY = source.CompositionTarget.TransformToDevice.M22;
+                }
+
+                double screenW = bounds.Width / dpiScaleX;
+                double screenH = bounds.Height / dpiScaleY;
+                double screenL = bounds.Left / dpiScaleX;
+                double screenT = bounds.Top / dpiScaleY;
+
+                Left = screenL + (screenW - Width) / 2.0;
+                Top = screenT + screenH - Height - 4.0;
+            }
+            catch { }
+        }
+
+        private void StartRunningAppCheckTimer()
+        {
+            runningCheckTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2.5) };
+            runningCheckTimer.Tick += (s, e) => CheckRunningApps();
+            runningCheckTimer.Start();
+            CheckRunningApps();
+        }
+
+        private void CheckRunningApps()
+        {
+            Task.Run(() =>
+            {
+                try
+                {
+                    var procs = Process.GetProcesses();
+                    HashSet<string> runningSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var p in procs)
+                    {
+                        try { runningSet.Add(p.ProcessName); } catch { }
+                    }
+
+                    Dispatcher.Invoke(() =>
+                    {
+                        foreach (var ctrl in dockControls)
+                        {
+                            if (ctrl.IsSeparator || string.IsNullOrEmpty(ctrl.ProcessNameMatch)) continue;
+                            bool isRunning = false;
+                            string[] targets = ctrl.ProcessNameMatch.Split('|');
+                            foreach (var t in targets)
+                            {
+                                if (runningSet.Contains(t))
+                                {
+                                    isRunning = true;
+                                    break;
+                                }
+                            }
+                            ctrl.RunningDot.Visibility = isRunning ? Visibility.Visible : Visibility.Hidden;
+                        }
+                    });
+                }
+                catch { }
+            });
+        }
+
+        private void LaunchFinder()
+        {
+            try { Process.Start(new ProcessStartInfo("explorer.exe") { UseShellExecute = true }); } catch { }
+        }
+
+        private void LaunchBrowser()
+        {
+            try { Process.Start(new ProcessStartInfo("https://www.google.com") { UseShellExecute = true }); } catch { }
+        }
+
+        private void LaunchChat()
+        {
+            try { Process.Start(new ProcessStartInfo("https://web.whatsapp.com") { UseShellExecute = true }); } catch { }
+        }
+
+        private void LaunchCamera()
+        {
+            try { Process.Start(new ProcessStartInfo("microsoft.windows.camera:") { UseShellExecute = true }); } catch { }
+        }
+
+        private void LaunchMail()
+        {
+            try { Process.Start(new ProcessStartInfo("mailto:") { UseShellExecute = true }); } catch { }
+        }
+
+        private void LaunchPhotos()
+        {
+            try { Process.Start(new ProcessStartInfo("ms-photos:") { UseShellExecute = true }); }
+            catch { try { Process.Start(new ProcessStartInfo("explorer.exe", Environment.GetFolderPath(Environment.SpecialFolder.MyPictures)) { UseShellExecute = true }); } catch { } }
+        }
+
+        private void LaunchMusic()
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo("spotify:") { UseShellExecute = true });
+            }
+            catch
+            {
+                parentWindow?.Dispatcher.Invoke(() =>
+                {
+                    parentWindow.SwitchSlide(0);
+                    parentWindow.AnimateToExpanded();
+                });
+            }
+        }
+
+        private void LaunchTerminal()
+        {
+            try { Process.Start(new ProcessStartInfo("wt.exe") { UseShellExecute = true }); }
+            catch { try { Process.Start(new ProcessStartInfo("cmd.exe") { UseShellExecute = true }); } catch { } }
+        }
+
+        private void LaunchTrash()
+        {
+            try { Process.Start(new ProcessStartInfo("explorer.exe", "shell:RecycleBinFolder") { UseShellExecute = true }); } catch { }
+        }
+
+        private static FrameworkElement BuildFinderIcon()
+        {
+            Grid g = new Grid
+            {
+                Background = new LinearGradientBrush(
+                    Color.FromRgb(41, 182, 246),
+                    Color.FromRgb(2, 132, 199),
+                    new Point(0, 0),
+                    new Point(0, 1))
+            };
+
+            Border leftHalf = new Border
+            {
+                Width = 23,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Background = new SolidColorBrush(Color.FromArgb(45, 255, 255, 255))
+            };
+            g.Children.Add(leftHalf);
+
+            Path split = new Path
+            {
+                Data = Geometry.Parse("M 23,4 C 23.5,12 21.5,18 23,24 C 24.5,30 23,42 23,42"),
+                Stroke = new SolidColorBrush(Color.FromRgb(20, 50, 110)),
+                StrokeThickness = 1.8
+            };
+            g.Children.Add(split);
+
+            Ellipse eyeL = new Ellipse
+            {
+                Width = 4,
+                Height = 4,
+                Fill = new SolidColorBrush(Color.FromRgb(20, 50, 110)),
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(14, 17, 0, 0)
+            };
+            Ellipse eyeR = new Ellipse
+            {
+                Width = 4,
+                Height = 4,
+                Fill = new SolidColorBrush(Color.FromRgb(20, 50, 110)),
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(28, 17, 0, 0)
+            };
+            g.Children.Add(eyeL);
+            g.Children.Add(eyeR);
+
+            Path smile = new Path
+            {
+                Data = Geometry.Parse("M 14,28 C 18,36 28,36 32,28"),
+                Stroke = new SolidColorBrush(Color.FromRgb(20, 50, 110)),
+                StrokeThickness = 2.4,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round
+            };
+            g.Children.Add(smile);
+            return g;
+        }
+
+        private static FrameworkElement BuildLaunchpadIcon()
+        {
+            Grid g = new Grid { Background = Brushes.White };
+            Grid ug = new Grid { Margin = new Thickness(7) };
+            for (int r = 0; r < 3; r++) ug.RowDefinitions.Add(new RowDefinition());
+            for (int c = 0; c < 3; c++) ug.ColumnDefinitions.Add(new ColumnDefinition());
+
+            Color[] colors = new Color[]
+            {
+                Color.FromRgb(249, 115, 22), Color.FromRgb(239, 68, 68), Color.FromRgb(168, 85, 247),
+                Color.FromRgb(59, 130, 246), Color.FromRgb(236, 72, 153), Color.FromRgb(16, 185, 129),
+                Color.FromRgb(234, 179, 8), Color.FromRgb(6, 182, 212), Color.FromRgb(99, 102, 241)
+            };
+
+            int idx = 0;
+            foreach (var col in colors)
+            {
+                Border tile = new Border
+                {
+                    Width = 8,
+                    Height = 8,
+                    CornerRadius = new CornerRadius(2.5),
+                    Background = new SolidColorBrush(col),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                Grid.SetRow(tile, idx / 3);
+                Grid.SetColumn(tile, idx % 3);
+                ug.Children.Add(tile);
+                idx++;
+            }
+
+            g.Children.Add(ug);
+            return g;
+        }
+
+        private static FrameworkElement BuildBrowserIcon()
+        {
+            Grid g = new Grid { Background = Brushes.White };
+            Ellipse circle = new Ellipse
+            {
+                Width = 36,
+                Height = 36,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Fill = new LinearGradientBrush(
+                    Color.FromRgb(56, 189, 248),
+                    Color.FromRgb(2, 132, 199),
+                    new Point(0, 0),
+                    new Point(0, 1))
+            };
+            g.Children.Add(circle);
+
+            Path needleRed = new Path
+            {
+                Data = Geometry.Parse("M 23,23 L 33,13 L 26,21 Z"),
+                Fill = new SolidColorBrush(Color.FromRgb(239, 68, 68))
+            };
+            Path needleWhite = new Path
+            {
+                Data = Geometry.Parse("M 23,23 L 13,33 L 20,25 Z"),
+                Fill = Brushes.White
+            };
+            Ellipse pin = new Ellipse
+            {
+                Width = 3.5,
+                Height = 3.5,
+                Fill = Brushes.White,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            g.Children.Add(needleRed);
+            g.Children.Add(needleWhite);
+            g.Children.Add(pin);
+            return g;
+        }
+
+        private static FrameworkElement BuildMessagesIcon()
+        {
+            Grid g = new Grid
+            {
+                Background = new LinearGradientBrush(
+                    Color.FromRgb(34, 197, 94),
+                    Color.FromRgb(21, 128, 61),
+                    new Point(0, 0),
+                    new Point(0, 1))
+            };
+            Path bubble = new Path
+            {
+                Data = Geometry.Parse("M 11,15 C 11,15 35,15 35,24 C 35,32 20,32 15,35 L 15,30 C 11,29 11,27 11,24 Z"),
+                Fill = Brushes.White
+            };
+            g.Children.Add(bubble);
+            return g;
+        }
+
+        private static FrameworkElement BuildFaceTimeIcon()
+        {
+            Grid g = new Grid
+            {
+                Background = new LinearGradientBrush(
+                    Color.FromRgb(74, 222, 128),
+                    Color.FromRgb(22, 163, 74),
+                    new Point(0, 0),
+                    new Point(0, 1))
+            };
+            Path cam = new Path
+            {
+                Data = Geometry.Parse("M 12,17 L 27,17 C 28.5,17 29,18 29,19 L 29,29 C 29,30 28.5,31 27,31 L 12,31 C 10.5,31 10,30 10,29 L 10,19 C 10,18 10.5,17 12,17 Z M 29,21.5 L 37,16 L 37,32 L 29,26.5 Z"),
+                Fill = Brushes.White
+            };
+            g.Children.Add(cam);
+            return g;
+        }
+
+        private static FrameworkElement BuildMailIcon()
+        {
+            Grid g = new Grid
+            {
+                Background = new LinearGradientBrush(
+                    Color.FromRgb(96, 165, 250),
+                    Color.FromRgb(37, 99, 235),
+                    new Point(0, 0),
+                    new Point(0, 1))
+            };
+            Path env = new Path
+            {
+                Data = Geometry.Parse("M 8,16 L 38,16 L 38,32 L 8,32 Z M 8,16 L 23,26 L 38,16 M 8,32 L 18,23 M 38,32 L 28,23"),
+                Stroke = Brushes.White,
+                StrokeThickness = 2,
+                Fill = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255))
+            };
+            g.Children.Add(env);
+            return g;
+        }
+
+        private static FrameworkElement BuildPhotosIcon()
+        {
+            Grid g = new Grid { Background = Brushes.White };
+            Color[] petalColors = new Color[]
+            {
+                Color.FromRgb(239, 68, 68),
+                Color.FromRgb(249, 115, 22),
+                Color.FromRgb(234, 179, 8),
+                Color.FromRgb(34, 197, 94),
+                Color.FromRgb(6, 182, 212),
+                Color.FromRgb(59, 130, 246),
+                Color.FromRgb(168, 85, 247),
+                Color.FromRgb(236, 72, 153)
+            };
+
+            for (int i = 0; i < 8; i++)
+            {
+                Border petal = new Border
+                {
+                    Width = 7.5,
+                    Height = 15,
+                    CornerRadius = new CornerRadius(4),
+                    Background = new SolidColorBrush(Color.FromArgb(210, petalColors[i].R, petalColors[i].G, petalColors[i].B)),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    RenderTransformOrigin = new Point(0.5, 1.0),
+                    RenderTransform = new TransformGroup
+                    {
+                        Children = new TransformCollection
+                        {
+                            new TranslateTransform(0, -5),
+                            new RotateTransform(i * 45.0)
+                        }
+                    }
+                };
+                g.Children.Add(petal);
+            }
+            return g;
+        }
+
+        private static FrameworkElement BuildMusicIcon()
+        {
+            Grid g = new Grid
+            {
+                Background = new LinearGradientBrush(
+                    Color.FromRgb(251, 113, 133),
+                    Color.FromRgb(225, 29, 72),
+                    new Point(0, 0),
+                    new Point(0, 1))
+            };
+            Path notes = new Path
+            {
+                Data = Geometry.Parse("M 16,13 L 32,9.5 L 32,27 C 31,26 29,25.5 27,26 C 24,27 23,29 24,31 C 25,33 28,33 30,32 C 31.5,31 32,29.5 32,28 L 32,15 L 18,18.5 L 18,29 C 17,28 15,27.5 13,28 C 10,29 9,31 10,33 C 11,35 14,35 16,34 C 17.5,33 18,31.5 18,30 Z"),
+                Fill = Brushes.White
+            };
+            g.Children.Add(notes);
+            return g;
+        }
+
+        private static FrameworkElement BuildTerminalIcon()
+        {
+            Grid g = new Grid
+            {
+                Background = new LinearGradientBrush(
+                    Color.FromRgb(39, 39, 42),
+                    Color.FromRgb(9, 9, 11),
+                    new Point(0, 0),
+                    new Point(0, 1))
+            };
+            Path prompt = new Path
+            {
+                Data = Geometry.Parse("M 13,17 L 22,23 L 13,29 M 24,29 L 33,29"),
+                Stroke = new SolidColorBrush(Color.FromRgb(56, 189, 248)),
+                StrokeThickness = 2.4,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round
+            };
+            g.Children.Add(prompt);
+            return g;
+        }
+
+        private static FrameworkElement BuildSettingsIcon()
+        {
+            Grid g = new Grid
+            {
+                Background = new LinearGradientBrush(
+                    Color.FromRgb(156, 163, 175),
+                    Color.FromRgb(75, 85, 99),
+                    new Point(0, 0),
+                    new Point(0, 1))
+            };
+            Path gear = new Path
+            {
+                Data = Geometry.Parse("M 23,10 L 25,10 L 26,13 L 28,14 L 31,12 L 32,13 L 32,16 L 34,18 L 37,17 L 37,19 L 35,21 L 35,23 L 37,25 L 37,27 L 34,26 L 32,28 L 32,31 L 31,32 L 28,30 L 26,31 L 25,34 L 23,34 L 22,31 L 20,30 L 17,32 L 16,31 L 16,28 L 14,26 L 11,27 L 11,25 L 13,23 L 13,21 L 11,19 L 11,17 L 14,18 L 16,16 L 16,13 L 17,12 L 20,14 L 22,13 Z"),
+                Fill = Brushes.White
+            };
+            Ellipse hole = new Ellipse
+            {
+                Width = 9,
+                Height = 9,
+                Fill = new SolidColorBrush(Color.FromRgb(75, 85, 99)),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            g.Children.Add(gear);
+            g.Children.Add(hole);
+            return g;
+        }
+
+        private static FrameworkElement BuildTrashIcon()
+        {
+            Grid g = new Grid { Background = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)) };
+            Path can = new Path
+            {
+                Data = Geometry.Parse("M 15,14 L 31,14 M 16,14 L 18,33 C 18,34 19,35 20,35 L 26,35 C 27,35 28,34 28,33 L 30,14 M 21,17 L 21.5,32 M 25,17 L 24.5,32"),
+                Stroke = Brushes.White,
+                StrokeThickness = 1.8,
+                StrokeStartLineCap = PenLineCap.Round
+            };
+            g.Children.Add(can);
+            return g;
+        }
+    }
+
     public class SettingsWindow : Window
     {
         private MainWindow parentIsland;
@@ -1519,6 +2313,13 @@ namespace Glance
         private Button resetHotkeyBtn;
         private bool isRecordingHotkey = false;
 
+        // macOS Dynamic Dock Customization
+        private bool tempIsDockInstalled;
+        private bool tempIsDockEnabled;
+        private Border cardDock;
+        private StackPanel spDockBody;
+        private CheckBox chkEnableDock;
+
         // Tab Navigation
         private int currentSelectedTab = 0;
         private Border tabBtnGeneral;
@@ -1548,6 +2349,8 @@ namespace Glance
 
             tempIsSearchInstalled = parentIsland != null ? parentIsland.IsSearchInstalled : true;
             tempIsSearchEnabled = parentIsland != null ? parentIsland.IsSearchEnabled : true;
+            tempIsDockInstalled = parentIsland != null ? parentIsland.IsDockInstalled : true;
+            tempIsDockEnabled = parentIsland != null ? parentIsland.IsDockEnabled : true;
             tempHotkeyModifiers = parentIsland != null ? parentIsland.HotkeyModifiers : (NativeMethods.MOD_CONTROL | NativeMethods.MOD_SHIFT);
             tempHotkeyKey = parentIsland != null ? parentIsland.HotkeyKey : NativeMethods.VK_P;
             tempHotkeyDisplay = parentIsland != null && !string.IsNullOrEmpty(parentIsland.HotkeyDisplay) ? parentIsland.HotkeyDisplay : "Ctrl + Shift + P";
@@ -1924,6 +2727,13 @@ namespace Glance
             RenderSearchOptionCard();
             sp.Children.Add(cardSearch);
 
+            // Option 6: macOS Dynamic Dock Component Settings (ON/OFF Toggle, Installer)
+            cardDock = CreateOptionCard();
+            spDockBody = new StackPanel();
+            cardDock.Child = spDockBody;
+            RenderDockOptionCard();
+            sp.Children.Add(cardDock);
+
             sv.Content = sp;
             return sv;
         }
@@ -2266,6 +3076,203 @@ namespace Glance
             if (key == Key.OemPlus) return "+";
             if (key == Key.OemMinus) return "-";
             return key.ToString().ToUpperInvariant();
+        }
+
+        private void RenderDockOptionCard()
+        {
+            if (spDockBody == null) return;
+            spDockBody.Children.Clear();
+
+            // Header Row: Title on Left, Badge on Right
+            DockPanel dpHeader = new DockPanel { Margin = new Thickness(0, 0, 0, 6) };
+
+            Border badge = new Border
+            {
+                CornerRadius = new CornerRadius(5),
+                Padding = new Thickness(7, 2, 7, 2),
+                VerticalAlignment = VerticalAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            DockPanel.SetDock(badge, Dock.Right);
+
+            TextBlock badgeText = new TextBlock
+            {
+                FontSize = 10,
+                FontWeight = FontWeights.Bold
+            };
+            badge.Child = badgeText;
+
+            if (!tempIsDockInstalled)
+            {
+                badge.Background = new SolidColorBrush(Color.FromArgb(45, 245, 158, 11));
+                badge.BorderBrush = new SolidColorBrush(Color.FromArgb(120, 245, 158, 11));
+                badge.BorderThickness = new Thickness(1);
+                badgeText.Foreground = new SolidColorBrush(Color.FromRgb(251, 191, 36));
+                badgeText.Text = "NOT INSTALLED";
+            }
+            else if (tempIsDockEnabled)
+            {
+                Color acc = MainWindow.ColorFromHex(tempColorAccent, Color.FromRgb(28, 231, 85));
+                badge.Background = new SolidColorBrush(Color.FromArgb(45, acc.R, acc.G, acc.B));
+                badge.BorderBrush = new SolidColorBrush(Color.FromArgb(120, acc.R, acc.G, acc.B));
+                badge.BorderThickness = new Thickness(1);
+                badgeText.Foreground = new SolidColorBrush(acc);
+                badgeText.Text = "ACTIVE & READY";
+            }
+            else
+            {
+                badge.Background = new SolidColorBrush(Color.FromArgb(45, 120, 120, 130));
+                badge.BorderBrush = new SolidColorBrush(Color.FromArgb(100, 120, 120, 130));
+                badge.BorderThickness = new Thickness(1);
+                badgeText.Foreground = new SolidColorBrush(Color.FromRgb(160, 160, 175));
+                badgeText.Text = "DISABLED";
+            }
+
+            dpHeader.Children.Add(badge);
+
+            TextBlock lblDockTitle = new TextBlock
+            {
+                Text = "macOS Dynamic Dock (Taskbar):",
+                Foreground = Brushes.White,
+                FontSize = 12.5,
+                FontWeight = FontWeights.SemiBold,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            dpHeader.Children.Add(lblDockTitle);
+            spDockBody.Children.Add(dpHeader);
+
+            if (!tempIsDockInstalled)
+            {
+                TextBlock lblNotInstalled = new TextBlock
+                {
+                    Text = "The macOS Dynamic Dock taskbar was excluded during setup. Install it anytime to get the floating frosted-glass bottom dock with smooth magnification wave, active app indicator dots, and quick app shortcuts.",
+                    Foreground = new SolidColorBrush(Color.FromRgb(165, 165, 178)),
+                    FontSize = 11,
+                    Margin = new Thickness(0, 0, 0, 10),
+                    TextWrapping = TextWrapping.Wrap
+                };
+                spDockBody.Children.Add(lblNotInstalled);
+
+                Button btnInstallDock = new Button
+                {
+                    Content = "📥 Install macOS Dock Component",
+                    Height = 34,
+                    Padding = new Thickness(14, 0, 14, 0),
+                    Background = new SolidColorBrush(MainWindow.ColorFromHex(tempColorAccent, Color.FromRgb(28, 231, 85))),
+                    Foreground = Brushes.Black,
+                    FontSize = 11.5,
+                    FontWeight = FontWeights.Bold,
+                    BorderThickness = new Thickness(0),
+                    Cursor = Cursors.Hand,
+                    HorizontalAlignment = HorizontalAlignment.Left
+                };
+
+                btnInstallDock.Click += (s, e) =>
+                {
+                    btnInstallDock.IsEnabled = false;
+                    btnInstallDock.Content = "⏳ Initializing Dock component & assets...";
+                    DispatcherTimer t = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(750) };
+                    t.Tick += (st, ev) =>
+                    {
+                        t.Stop();
+                        tempIsDockInstalled = true;
+                        tempIsDockEnabled = true;
+                        if (parentIsland != null)
+                        {
+                            parentIsland.ApplyDockConfig(true, true);
+                            parentIsland.SaveAppConfig();
+                        }
+                        RenderDockOptionCard();
+                    };
+                    t.Start();
+                };
+
+                spDockBody.Children.Add(btnInstallDock);
+                return;
+            }
+
+            // Component IS installed: Show ON/OFF toggle switch & description
+            TextBlock lblDockSub = new TextBlock
+            {
+                Text = "Authentic macOS Monterey/Ventura floating glass dock with wave magnification, running app indicator dots, and launch bounce animations.",
+                Foreground = new SolidColorBrush(Color.FromRgb(165, 165, 178)),
+                FontSize = 11,
+                Margin = new Thickness(0, 0, 0, 8),
+                TextWrapping = TextWrapping.Wrap
+            };
+            spDockBody.Children.Add(lblDockSub);
+
+            chkEnableDock = new CheckBox
+            {
+                Content = "Enable macOS Dynamic Dock Taskbar",
+                IsChecked = tempIsDockEnabled,
+                Foreground = Brushes.White,
+                FontSize = 12,
+                FontWeight = FontWeights.Medium,
+                Margin = new Thickness(0, 0, 0, 8),
+                Cursor = Cursors.Hand
+            };
+
+            chkEnableDock.Click += (s, e) =>
+            {
+                tempIsDockEnabled = chkEnableDock.IsChecked == true;
+                if (tempIsDockEnabled)
+                {
+                    Color acc = MainWindow.ColorFromHex(tempColorAccent, Color.FromRgb(28, 231, 85));
+                    badge.Background = new SolidColorBrush(Color.FromArgb(45, acc.R, acc.G, acc.B));
+                    badge.BorderBrush = new SolidColorBrush(Color.FromArgb(120, acc.R, acc.G, acc.B));
+                    badgeText.Foreground = new SolidColorBrush(acc);
+                    badgeText.Text = "ACTIVE & READY";
+                }
+                else
+                {
+                    badge.Background = new SolidColorBrush(Color.FromArgb(45, 120, 120, 130));
+                    badge.BorderBrush = new SolidColorBrush(Color.FromArgb(100, 120, 120, 130));
+                    badgeText.Foreground = new SolidColorBrush(Color.FromRgb(160, 160, 175));
+                    badgeText.Text = "DISABLED";
+                }
+            };
+
+            spDockBody.Children.Add(chkEnableDock);
+
+            // Feature Highlights Pill Box
+            Border infoBox = new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(90, 20, 20, 26)),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(45, 45, 52)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(8),
+                Padding = new Thickness(10, 8, 10, 8),
+                Margin = new Thickness(0, 2, 0, 2)
+            };
+
+            StackPanel spInfo = new StackPanel();
+            TextBlock tip1 = new TextBlock
+            {
+                Text = "• Wave Magnification: Hover smoothly across icons for genuine macOS physics.",
+                Foreground = new SolidColorBrush(Color.FromRgb(175, 175, 185)),
+                FontSize = 10.5,
+                Margin = new Thickness(0, 0, 0, 3)
+            };
+            TextBlock tip2 = new TextBlock
+            {
+                Text = "• Running Indicators: Subtle glowing dots underneath currently active apps.",
+                Foreground = new SolidColorBrush(Color.FromRgb(175, 175, 185)),
+                FontSize = 10.5,
+                Margin = new Thickness(0, 0, 0, 3)
+            };
+            TextBlock tip3 = new TextBlock
+            {
+                Text = "• Native Harmony: Floating design runs seamlessly above or alongside Windows taskbar.",
+                Foreground = new SolidColorBrush(Color.FromRgb(175, 175, 185)),
+                FontSize = 10.5
+            };
+
+            spInfo.Children.Add(tip1);
+            spInfo.Children.Add(tip2);
+            spInfo.Children.Add(tip3);
+            infoBox.Child = spInfo;
+            spDockBody.Children.Add(infoBox);
         }
 
         // =======================================================
@@ -2670,6 +3677,7 @@ namespace Glance
                 parentIsland.ShowSlideShelf = sh;
 
                 parentIsland.ApplySearchConfig(tempIsSearchInstalled, tempIsSearchEnabled);
+                parentIsland.ApplyDockConfig(tempIsDockInstalled, tempIsDockEnabled);
                 parentIsland.UpdateGlobalHotkey(tempHotkeyModifiers, tempHotkeyKey, tempHotkeyDisplay);
                 parentIsland.ApplyCustomColors();
                 parentIsland.ApplySlideVisibilityConfig();
@@ -2751,13 +3759,17 @@ namespace Glance
         public string HotkeyDisplay { get; set; }
         public bool IsSearchInstalled { get; set; } = true;
         public bool IsSearchEnabled { get; set; } = true;
+        public bool IsDockInstalled { get; set; } = true;
+        public bool IsDockEnabled { get; set; } = true;
 
         private SolidColorBrush notchBgBrush;
         private static SpotlightWindow spotlightWin;
+        private static MacDockWindow dockWin;
 
         // UI Elements
         private Border searchQuickBtn;
         private Forms.ToolStripMenuItem traySearchItem;
+        private Forms.ToolStripMenuItem trayDockItem;
         private Border notchBody;
         private Grid collapsedView;
         private Grid expandedView;
@@ -3013,6 +4025,8 @@ namespace Glance
                 HotkeyDisplay = PrimaryInstance.HotkeyDisplay;
                 IsSearchInstalled = PrimaryInstance.IsSearchInstalled;
                 IsSearchEnabled = PrimaryInstance.IsSearchEnabled;
+                IsDockInstalled = PrimaryInstance.IsDockInstalled;
+                IsDockEnabled = PrimaryInstance.IsDockEnabled;
 
                 notesList = new List<NoteItem>(PrimaryInstance.notesList);
                 clipList = new List<ClipItem>(PrimaryInstance.clipList);
@@ -3029,7 +4043,15 @@ namespace Glance
             TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
             TextOptions.SetTextRenderingMode(this, TextRenderingMode.ClearType);
             Topmost = true;
-            Closed += (s, e) => MemoryOptimizer.TrimMemory(force: true);
+            Closed += (s, e) =>
+            {
+                if (dockWin != null)
+                {
+                    try { dockWin.Close(); } catch { }
+                    dockWin = null;
+                }
+                MemoryOptimizer.TrimMemory(force: true);
+            };
             ShowInTaskbar = false;
             ResizeMode = ResizeMode.NoResize;
 
@@ -3153,7 +4175,9 @@ namespace Glance
                     hotkeyKey = HotkeyKey,
                     hotkeyDisplay = HotkeyDisplay,
                     isSearchInstalled = IsSearchInstalled,
-                    isSearchEnabled = IsSearchEnabled
+                    isSearchEnabled = IsSearchEnabled,
+                    isDockInstalled = IsDockInstalled,
+                    isDockEnabled = IsDockEnabled
                 };
                 File.WriteAllText(configFilePath, json.Serialize(cfg), Encoding.UTF8);
             }
@@ -3281,6 +4305,10 @@ namespace Glance
             {
                 ApplyDisplayMode(DisplayMode);
             }
+            if (dockWin != null && dockWin.IsVisible)
+            {
+                dockWin.Reposition();
+            }
         }
 
         private void OnWindowLoaded(object sender, RoutedEventArgs e)
@@ -3324,6 +4352,7 @@ namespace Glance
                     }
                     UpdateGlobalHotkey(HotkeyModifiers, HotkeyKey, HotkeyDisplay);
                     ApplySearchConfig(IsSearchInstalled, IsSearchEnabled);
+                    ApplyDockConfig(IsDockInstalled, IsDockEnabled);
                     NativeMethods.AddClipboardFormatListener(hwnd);
 
                     clockTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1000) };
@@ -3482,6 +4511,56 @@ namespace Glance
                 CompanionInstance.IsSearchEnabled = isEnabled;
                 CompanionInstance.ApplySearchConfig(isInstalled, isEnabled);
             }
+        }
+
+        public void ApplyDockConfig(bool isInstalled, bool isEnabled)
+        {
+            IsDockInstalled = isInstalled;
+            IsDockEnabled = isEnabled;
+
+            bool active = IsDockInstalled && IsDockEnabled;
+
+            if (trayDockItem != null)
+            {
+                trayDockItem.Visible = IsDockInstalled;
+                trayDockItem.Checked = active;
+            }
+
+            if (!IsCompanionWindow)
+            {
+                if (active)
+                {
+                    if (dockWin == null)
+                    {
+                        dockWin = new MacDockWindow(this);
+                    }
+                    if (!dockWin.IsVisible)
+                    {
+                        dockWin.Show();
+                    }
+                    dockWin.Reposition();
+                }
+                else
+                {
+                    if (dockWin != null && dockWin.IsVisible)
+                    {
+                        dockWin.Hide();
+                    }
+                }
+            }
+
+            if (CompanionInstance != null)
+            {
+                CompanionInstance.IsDockInstalled = isInstalled;
+                CompanionInstance.IsDockEnabled = isEnabled;
+            }
+        }
+
+        public void ToggleDock()
+        {
+            if (!IsDockInstalled) return;
+            ApplyDockConfig(IsDockInstalled, !IsDockEnabled);
+            SaveAppConfig();
         }
 
         public void UpdateGlobalHotkey(uint modifiers, uint key, string display)
@@ -5759,7 +6838,7 @@ namespace Glance
         // =======================================================
         // ANIMATIONS
         // =======================================================
-        private void AnimateToExpanded()
+        public void AnimateToExpanded()
         {
             if (isExpanded) return;
             isExpanded = true;
@@ -5965,7 +7044,7 @@ namespace Glance
             }
         }
 
-        private void SwitchSlide(int index, bool? forceForward = null, bool animate = true)
+        public void SwitchSlide(int index, bool? forceForward = null, bool animate = true)
         {
             if (activeSlideIndices == null || activeSlideIndices.Count == 0) return;
 
@@ -7128,6 +8207,8 @@ namespace Glance
 
                         IsSearchInstalled = cfg.isSearchInstalled;
                         IsSearchEnabled = cfg.isSearchEnabled;
+                        IsDockInstalled = cfg.isDockInstalled;
+                        IsDockEnabled = cfg.isDockEnabled;
                     }
                 }
             }
@@ -7448,6 +8529,12 @@ namespace Glance
             traySearchItem = new Forms.ToolStripMenuItem("Glance Search (" + HotkeyDisplay + ")", null, (s, e) => Dispatcher.Invoke(ToggleSpotlightSearch));
             traySearchItem.Visible = (IsSearchInstalled && IsSearchEnabled);
             menu.Items.Add(traySearchItem);
+
+            trayDockItem = new Forms.ToolStripMenuItem("macOS Dynamic Dock", null, (s, e) => Dispatcher.Invoke(ToggleDock));
+            trayDockItem.Visible = IsDockInstalled;
+            trayDockItem.Checked = (IsDockInstalled && IsDockEnabled);
+            menu.Items.Add(trayDockItem);
+
             menu.Items.Add("Glance Settings...", null, (s, e) => Dispatcher.Invoke(OpenSettingsDialog));
 
             int screenCount = Forms.Screen.AllScreens.Length;
