@@ -2764,6 +2764,10 @@ namespace Glance
         private TextBlock collapsedTimeText;
         private TextBlock expandedDateText;
         private TextBlock expandedTimeText;
+        private const double CollapsedBatterySize = 20.0;
+        private const double CollapsedBatteryStroke = 2.8;
+        private const double ExpandedBatterySize = 18.0;
+        private const double ExpandedBatteryStroke = 2.8;
         private Path collapsedBatteryArc;
         private Path expandedBatteryArc;
         private Ellipse collapsedBatteryBgRing;
@@ -3739,7 +3743,7 @@ namespace Glance
             collapsedIdleLayout.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
             // 1. Kiri: Battery Ring Widget
-            Grid batRing = CreateBatteryRingWidget(20, 2.8, out collapsedBatteryArc, out collapsedBatteryBgRing);
+            Grid batRing = CreateBatteryRingWidget(CollapsedBatterySize, CollapsedBatteryStroke, out collapsedBatteryArc, out collapsedBatteryBgRing);
             batRing.HorizontalAlignment = HorizontalAlignment.Left;
             batRing.VerticalAlignment = VerticalAlignment.Center;
             Grid.SetColumn(batRing, 0);
@@ -3936,7 +3940,7 @@ namespace Glance
                 VerticalAlignment = VerticalAlignment.Center
             };
 
-            Grid smallBatRing = CreateBatteryRingWidget(18, 2.8, out expandedBatteryArc, out expandedBatteryBgRing);
+            Grid smallBatRing = CreateBatteryRingWidget(ExpandedBatterySize, ExpandedBatteryStroke, out expandedBatteryArc, out expandedBatteryBgRing);
             smallBatRing.Margin = new Thickness(0, 0, 8, 0);
 
             expandedDateText = new TextBlock
@@ -5558,7 +5562,7 @@ namespace Glance
         // =======================================================
         private Grid CreateBatteryRingWidget(double size, double strokeThickness, out Path fgArc, out Ellipse bgRingOut)
         {
-            Grid wrap = new Grid { Width = size, Height = size };
+            Grid wrap = new Grid { Width = size, Height = size, ClipToBounds = false };
             double radius = (size - strokeThickness) / 2.0;
             Point center = new Point(size / 2.0, size / 2.0);
 
@@ -5586,8 +5590,8 @@ namespace Glance
             {
                 Data = Geometry.Parse("M 13,2 L 4.5,13.5 L 11,13.5 L 10,22 L 19.5,10.5 L 13,10.5 Z"),
                 Fill = Brushes.White,
-                Width = size * 0.46,
-                Height = size * 0.46,
+                Width = size * 0.44,
+                Height = size * 0.44,
                 Stretch = Stretch.Uniform,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
@@ -5601,7 +5605,17 @@ namespace Glance
 
         private Geometry BuildArcGeometry(Point center, double radius, double percent)
         {
-            double pct = Math.Max(2, Math.Min(99.9, percent));
+            if (percent <= 1.0)
+            {
+                return Geometry.Empty;
+            }
+
+            if (percent >= 99.5)
+            {
+                return new EllipseGeometry(center, radius, radius);
+            }
+
+            double pct = Math.Max(2.0, Math.Min(99.0, percent));
             double angleRad = (pct / 100.0) * 2.0 * Math.PI;
             Point start = new Point(center.X, center.Y - radius);
             Point end = new Point(
@@ -6747,8 +6761,14 @@ namespace Glance
             if (batPct != lastBatPct)
             {
                 lastBatPct = batPct;
-                collapsedBatteryArc.Data = BuildArcGeometry(new Point(12, 12), (24 - 3.3) / 2.0, batPct);
-                expandedBatteryArc.Data = BuildArcGeometry(new Point(9, 9), (18 - 2.8) / 2.0, batPct);
+                collapsedBatteryArc.Data = BuildArcGeometry(
+                    new Point(CollapsedBatterySize / 2.0, CollapsedBatterySize / 2.0),
+                    (CollapsedBatterySize - CollapsedBatteryStroke) / 2.0,
+                    batPct);
+                expandedBatteryArc.Data = BuildArcGeometry(
+                    new Point(ExpandedBatterySize / 2.0, ExpandedBatterySize / 2.0),
+                    (ExpandedBatterySize - ExpandedBatteryStroke) / 2.0,
+                    batPct);
             }
 
             // Realtime Network Speed
