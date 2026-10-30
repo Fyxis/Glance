@@ -3927,6 +3927,11 @@ namespace Glance
         private string loadedLyricsKey = "";
         private List<LyricLine> syncedLyrics = new List<LyricLine>();
         private int activeLyricIndex = -1;
+        private DispatcherTimer lyricScrollAnimTimer;
+        private double lyricAnimStartOffset;
+        private double lyricAnimTargetOffset;
+        private DateTime lyricAnimStartTime;
+        private const double LyricAnimDurationMs = 280.0;
 
         // CPU delta tracking
         private long prevIdleTime = 0;
@@ -5593,9 +5598,15 @@ namespace Glance
             {
                 VerticalScrollBarVisibility = ScrollBarVisibility.Hidden,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                Margin = new Thickness(0, 2, 0, 2)
+                Margin = new Thickness(0, 2, 0, 2),
+                Focusable = false
             };
-            lyricsStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            lyricsScroll.PreviewMouseWheel += (s, e) => StopLyricScrollAnimation();
+            lyricsStack = new StackPanel
+            {
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(0, 42, 0, 50)
+            };
             lyricsScroll.Content = lyricsStack;
             Grid.SetRow(lyricsScroll, 1);
 
@@ -6844,7 +6855,15 @@ namespace Glance
             isExpanded = true;
 
             if (clockTimer != null) clockTimer.Interval = TimeSpan.FromMilliseconds(250);
+            activeLyricIndex = -1;
             UpdateMediaTimelineUI();
+            if (showLyrics)
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    ScrollActiveLyricToCenter(animate: false);
+                }), DispatcherPriority.Loaded);
+            }
 
             notchBody.CornerRadius = new CornerRadius(26);
 
@@ -7196,6 +7215,11 @@ namespace Glance
                 }
                 activeDotPills[i].Background = targetBrush;
             }
+
+            if (newIdx == 0 && showLyrics)
+            {
+                ScrollActiveLyricToCenter(animate: false);
+            }
         }
 
         // =======================================================
@@ -7234,6 +7258,93 @@ namespace Glance
             {
                 CompanionInstance.OnFastTick(sender, e);
             }
+        }
+
+        private void StopLyricScrollAnimation()
+        {
+            if (lyricScrollAnimTimer != null && lyricScrollAnimTimer.IsEnabled)
+            {
+                lyricScrollAnimTimer.Stop();
+            }
+        }
+
+        private void ScrollActiveLyricToCenter(bool animate = true)
+        {
+            if (lyricsScroll == null || lyricsStack == null) return;
+            if (activeLyricIndex < 0 || activeLyricIndex >= lyricsStack.Children.Count) return;
+
+            FrameworkElement targetElement = lyricsStack.Children[activeLyricIndex] as FrameworkElement;
+            if (targetElement == null) return;
+
+            try
+            {
+                lyricsStack.UpdateLayout();
+            }
+            catch { }
+
+            double itemTop = 0;
+            try
+            {
+                GeneralTransform gt = targetElement.TransformToAncestor(lyricsStack);
+                Point pt = gt.Transform(new Point(0, 0));
+                itemTop = pt.Y;
+            }
+            catch
+            {
+                itemTop = lyricsStack.Margin.Top;
+                for (int k = 0; k < activeLyricIndex; k++)
+                {
+                    var ch = lyricsStack.Children[k] as FrameworkElement;
+                    if (ch != null) itemTop += ch.ActualHeight + ch.Margin.Top + ch.Margin.Bottom;
+                }
+            }
+
+            double itemHeight = targetElement.ActualHeight > 0 ? targetElement.ActualHeight : 20.0;
+            double itemCenter = itemTop + (itemHeight / 2.0);
+
+            double viewportHeight = lyricsScroll.ViewportHeight;
+            if (viewportHeight <= 0) viewportHeight = lyricsScroll.ActualHeight;
+            if (viewportHeight <= 0) viewportHeight = 102.0;
+
+            double targetOffset = itemCenter - (viewportHeight / 2.0);
+            if (targetOffset < 0) targetOffset = 0;
+            if (targetOffset > lyricsScroll.ScrollableHeight) targetOffset = lyricsScroll.ScrollableHeight;
+
+            if (!animate || Math.Abs(lyricsScroll.VerticalOffset - targetOffset) < 1.0)
+            {
+                StopLyricScrollAnimation();
+                lyricsScroll.ScrollToVerticalOffset(targetOffset);
+                return;
+            }
+
+            // Smooth cubic ease-out glide animation
+            StopLyricScrollAnimation();
+            lyricAnimStartOffset = lyricsScroll.VerticalOffset;
+            lyricAnimTargetOffset = targetOffset;
+            lyricAnimStartTime = DateTime.UtcNow;
+
+            if (lyricScrollAnimTimer == null)
+            {
+                lyricScrollAnimTimer = new DispatcherTimer(DispatcherPriority.Render)
+                {
+                    Interval = TimeSpan.FromMilliseconds(16)
+                };
+                lyricScrollAnimTimer.Tick += (s, e) =>
+                {
+                    double elapsed = (DateTime.UtcNow - lyricAnimStartTime).TotalMilliseconds;
+                    double t = Math.Max(0.0, Math.Min(1.0, elapsed / LyricAnimDurationMs));
+                    double ease = 1.0 - Math.Pow(1.0 - t, 3);
+                    double current = lyricAnimStartOffset + (lyricAnimTargetOffset - lyricAnimStartOffset) * ease;
+                    lyricsScroll.ScrollToVerticalOffset(current);
+
+                    if (t >= 1.0)
+                    {
+                        lyricScrollAnimTimer.Stop();
+                        lyricsScroll.ScrollToVerticalOffset(lyricAnimTargetOffset);
+                    }
+                };
+            }
+            lyricScrollAnimTimer.Start();
         }
 
         private void UpdateMediaTimelineUI()
@@ -7282,11 +7393,12 @@ namespace Glance
                         if (tb == null) continue;
                         bool active = (i == activeLyricIndex);
                         Color colAccent = ColorFromHex(ColorAccent, Color.FromRgb(28, 231, 85));
-                        tb.Foreground = active ? new SolidColorBrush(colAccent) : new SolidColorBrush(Color.FromRgb(140, 140, 150));
+                        tb.Foreground = active ? new SolidColorBrush(colAccent) : new SolidColorBrush(Color.FromRgb(145, 145, 155));
                         tb.FontWeight = active ? FontWeights.Bold : FontWeights.Normal;
-                        tb.FontSize = active ? 11.5 : 10;
-                        if (active) tb.BringIntoView();
+                        tb.FontSize = active ? 11.5 : 10.0;
+                        tb.Opacity = active ? 1.0 : (Math.Abs(i - activeLyricIndex) == 1 ? 0.65 : 0.40);
                     }
+                    ScrollActiveLyricToCenter(animate: true);
                 }
             }
         }
@@ -7572,7 +7684,16 @@ namespace Glance
             if (calendarPanel != null) calendarPanel.Visibility = showLyrics ? Visibility.Collapsed : Visibility.Visible;
             if (lyricsPanel != null) lyricsPanel.Visibility = showLyrics ? Visibility.Visible : Visibility.Collapsed;
 
-            if (showLyrics) FetchLyricsIfNeeded();
+            if (showLyrics)
+            {
+                FetchLyricsIfNeeded();
+                activeLyricIndex = -1;
+                UpdateMediaTimelineUI();
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    ScrollActiveLyricToCenter(animate: false);
+                }), DispatcherPriority.Loaded);
+            }
         }
 
         private void FetchLyricsIfNeeded()
@@ -7584,6 +7705,7 @@ namespace Glance
                 loadedLyricsKey = "";
                 syncedLyrics.Clear();
                 lyricsHeaderText.Text = "Lyrics";
+                lyricsStack.Margin = new Thickness(0);
                 lyricsStack.Children.Clear();
                 lyricsStack.Children.Add(new TextBlock
                 {
@@ -7598,12 +7720,22 @@ namespace Glance
             }
 
             string key = title + "|" + artist;
-            if (key == loadedLyricsKey) return;
+            if (key == loadedLyricsKey)
+            {
+                activeLyricIndex = -1;
+                UpdateMediaTimelineUI();
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    ScrollActiveLyricToCenter(animate: false);
+                }), DispatcherPriority.Loaded);
+                return;
+            }
             loadedLyricsKey = key;
             syncedLyrics.Clear();
             activeLyricIndex = -1;
 
             lyricsHeaderText.Text = string.IsNullOrEmpty(artist) ? title : (title + " — " + artist);
+            lyricsStack.Margin = new Thickness(0);
             lyricsStack.Children.Clear();
             lyricsStack.Children.Add(new TextBlock
             {
@@ -7611,7 +7743,7 @@ namespace Glance
                 Foreground = new SolidColorBrush(Color.FromRgb(160, 160, 170)),
                 FontSize = 10.5,
                 TextAlignment = TextAlignment.Center,
-                Margin = new Thickness(0, 22, 0, 0)
+                Margin = new Thickness(0, 26, 0, 0)
             });
 
             Task.Run(() =>
@@ -7678,6 +7810,7 @@ namespace Glance
                     if (parsedSynced.Count > 0)
                     {
                         syncedLyrics = parsedSynced;
+                        lyricsStack.Margin = new Thickness(0, 42, 0, 50);
                         if (!IsCompanionWindow && CompanionInstance != null)
                         {
                             CompanionInstance.syncedLyrics = parsedSynced;
@@ -7688,25 +7821,34 @@ namespace Glance
                             TextBlock tb = new TextBlock
                             {
                                 Text = l.Text,
-                                Foreground = new SolidColorBrush(Color.FromRgb(140, 140, 150)),
+                                Foreground = new SolidColorBrush(Color.FromRgb(145, 145, 155)),
                                 FontSize = 10,
                                 FontWeight = FontWeights.Normal,
                                 TextAlignment = TextAlignment.Center,
                                 TextWrapping = TextWrapping.Wrap,
-                                Margin = new Thickness(2, 2, 2, 2),
+                                Margin = new Thickness(2, 3, 2, 3),
                                 Cursor = Cursors.Hand
                             };
                             tb.MouseLeftButtonUp += (s, ev) =>
                             {
                                 ev.Handled = true;
                                 pendingSeekSec = jumpSec;
+                                currentPos = jumpSec;
+                                lastPosSync = DateTime.UtcNow;
+                                UpdateMediaTimelineUI();
                             };
                             lyricsStack.Children.Add(tb);
                         }
+                        activeLyricIndex = -1;
                         UpdateMediaTimelineUI();
+                        Dispatcher.BeginInvoke(new Action(() =>
+                        {
+                            ScrollActiveLyricToCenter(animate: false);
+                        }), DispatcherPriority.Loaded);
                     }
                     else if (parsedPlain.Count > 0)
                     {
+                        lyricsStack.Margin = new Thickness(0, 8, 0, 12);
                         foreach (string line in parsedPlain)
                         {
                             lyricsStack.Children.Add(new TextBlock
@@ -7722,13 +7864,14 @@ namespace Glance
                     }
                     else
                     {
+                        lyricsStack.Margin = new Thickness(0);
                         lyricsStack.Children.Add(new TextBlock
                         {
                             Text = "No lyrics found for this track",
                             Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 160)),
                             FontSize = 10.5,
                             TextAlignment = TextAlignment.Center,
-                            Margin = new Thickness(0, 22, 0, 0)
+                            Margin = new Thickness(0, 26, 0, 0)
                         });
                     }
 
