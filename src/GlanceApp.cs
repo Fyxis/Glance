@@ -4023,7 +4023,8 @@ namespace Glance
             // 3. Slides Container (6 Slides)
             Grid slidesHost = new Grid
             {
-                Margin = new Thickness(42, 34, 42, 24)
+                Margin = new Thickness(42, 34, 42, 24),
+                ClipToBounds = true
             };
 
             slidePanels[0] = BuildMediaSlide();
@@ -4035,6 +4036,7 @@ namespace Glance
 
             for (int i = 0; i < SlideCount; i++)
             {
+                slidePanels[i].RenderTransform = new TranslateTransform(0, 0);
                 slidePanels[i].Visibility = (i == 0) ? Visibility.Visible : Visibility.Collapsed;
                 slidesHost.Children.Add(slidePanels[i]);
             }
@@ -5752,7 +5754,7 @@ namespace Glance
                 currentSlide = 0;
             }
 
-            SwitchSlide(currentSlide);
+            SwitchSlide(currentSlide, null, false);
 
             if (!IsCompanionWindow && CompanionInstance != null)
             {
@@ -5821,7 +5823,7 @@ namespace Glance
             }
 
             // 5. Update dots active color
-            SwitchSlide(currentSlide);
+            SwitchSlide(currentSlide, null, false);
 
             // 6. Sync with Companion Window if active
             if (!IsCompanionWindow && CompanionInstance != null)
@@ -5838,25 +5840,131 @@ namespace Glance
             }
         }
 
-        private void SwitchSlide(int index)
+        private void SwitchSlide(int index, bool? forceForward = null, bool animate = true)
         {
             if (activeSlideIndices == null || activeSlideIndices.Count == 0) return;
-            currentSlide = (index + activeSlideIndices.Count) % activeSlideIndices.Count;
-            int targetSlide = activeSlideIndices[currentSlide];
 
-            for (int i = 0; i < SlideCount; i++)
+            int newSlidePos = (index + activeSlideIndices.Count) % activeSlideIndices.Count;
+            int oldSlidePos = currentSlide;
+            int oldIdx = (oldSlidePos >= 0 && oldSlidePos < activeSlideIndices.Count) ? activeSlideIndices[oldSlidePos] : -1;
+            currentSlide = newSlidePos;
+            int newIdx = activeSlideIndices[currentSlide];
+
+            bool isForward;
+            if (forceForward.HasValue)
             {
-                if (slidePanels[i] != null)
+                isForward = forceForward.Value;
+            }
+            else if (index > oldSlidePos || (oldSlidePos == activeSlideIndices.Count - 1 && newSlidePos == 0 && index != oldSlidePos))
+            {
+                isForward = true;
+            }
+            else if (index < oldSlidePos || (oldSlidePos == 0 && newSlidePos == activeSlideIndices.Count - 1 && index != oldSlidePos))
+            {
+                isForward = false;
+            }
+            else
+            {
+                isForward = (newSlidePos >= oldSlidePos);
+            }
+
+            if (!animate || oldIdx == newIdx || oldIdx == -1)
+            {
+                for (int i = 0; i < SlideCount; i++)
                 {
-                    if (i == targetSlide)
+                    if (slidePanels[i] != null)
                     {
-                        slidePanels[i].Visibility = Visibility.Visible;
-                        slidePanels[i].BeginAnimation(OpacityProperty, new DoubleAnimation(0.3, 1.0, TimeSpan.FromMilliseconds(130)));
+                        slidePanels[i].BeginAnimation(OpacityProperty, null);
+                        var tr = slidePanels[i].RenderTransform as TranslateTransform;
+                        if (tr != null)
+                        {
+                            tr.BeginAnimation(TranslateTransform.XProperty, null);
+                            tr.X = 0;
+                        }
+
+                        if (i == newIdx)
+                        {
+                            slidePanels[i].Visibility = Visibility.Visible;
+                            slidePanels[i].Opacity = 1.0;
+                        }
+                        else
+                        {
+                            slidePanels[i].Visibility = Visibility.Collapsed;
+                        }
                     }
-                    else
+                }
+            }
+            else
+            {
+                var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+                var dur = TimeSpan.FromMilliseconds(220);
+
+                var incoming = (newIdx >= 0 && newIdx < SlideCount) ? slidePanels[newIdx] : null;
+                var outgoing = (oldIdx >= 0 && oldIdx < SlideCount) ? slidePanels[oldIdx] : null;
+
+                // Hide any other inactive panels immediately
+                for (int i = 0; i < SlideCount; i++)
+                {
+                    if (i != newIdx && i != oldIdx && slidePanels[i] != null)
                     {
+                        slidePanels[i].BeginAnimation(OpacityProperty, null);
+                        var tr = slidePanels[i].RenderTransform as TranslateTransform;
+                        if (tr != null) tr.BeginAnimation(TranslateTransform.XProperty, null);
                         slidePanels[i].Visibility = Visibility.Collapsed;
                     }
+                }
+
+                // Animate incoming panel
+                if (incoming != null)
+                {
+                    var transIn = incoming.RenderTransform as TranslateTransform;
+                    if (transIn == null)
+                    {
+                        transIn = new TranslateTransform();
+                        incoming.RenderTransform = transIn;
+                    }
+
+                    transIn.BeginAnimation(TranslateTransform.XProperty, null);
+                    incoming.BeginAnimation(OpacityProperty, null);
+
+                    double startX = isForward ? 36.0 : -36.0;
+                    transIn.X = startX;
+                    incoming.Opacity = 0.0;
+                    incoming.Visibility = Visibility.Visible;
+
+                    transIn.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(0.0, dur) { EasingFunction = ease });
+                    incoming.BeginAnimation(OpacityProperty, new DoubleAnimation(1.0, dur) { EasingFunction = ease });
+                }
+
+                // Animate outgoing panel
+                if (outgoing != null && outgoing != incoming)
+                {
+                    var transOut = outgoing.RenderTransform as TranslateTransform;
+                    if (transOut == null)
+                    {
+                        transOut = new TranslateTransform();
+                        outgoing.RenderTransform = transOut;
+                    }
+
+                    transOut.BeginAnimation(TranslateTransform.XProperty, null);
+                    outgoing.BeginAnimation(OpacityProperty, null);
+
+                    double endX = isForward ? -36.0 : 36.0;
+                    var animX = new DoubleAnimation(endX, dur) { EasingFunction = ease };
+                    var animOp = new DoubleAnimation(0.0, dur) { EasingFunction = ease };
+
+                    int capturedOldIdx = oldIdx;
+                    animOp.Completed += (s, e) =>
+                    {
+                        if (currentSlide < activeSlideIndices.Count && activeSlideIndices[currentSlide] != capturedOldIdx)
+                        {
+                            outgoing.Visibility = Visibility.Collapsed;
+                            transOut.X = 0;
+                        }
+                    };
+
+                    transOut.BeginAnimation(TranslateTransform.XProperty, animX);
+                    outgoing.BeginAnimation(OpacityProperty, animOp);
                 }
             }
 
@@ -5865,10 +5973,24 @@ namespace Glance
             for (int i = 0; i < activeDotPills.Count; i++)
             {
                 bool active = (i == currentSlide);
-                activeDotPills[i].Width = active ? 18 : 5;
-                activeDotPills[i].Background = active
+                double targetW = active ? 18.0 : 5.0;
+                var targetBrush = active
                     ? new SolidColorBrush(accent)
                     : new SolidColorBrush(Color.FromArgb(140, 130, 130, 140));
+
+                if (animate)
+                {
+                    activeDotPills[i].BeginAnimation(WidthProperty, new DoubleAnimation(targetW, TimeSpan.FromMilliseconds(220))
+                    {
+                        EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+                    });
+                }
+                else
+                {
+                    activeDotPills[i].BeginAnimation(WidthProperty, null);
+                    activeDotPills[i].Width = targetW;
+                }
+                activeDotPills[i].Background = targetBrush;
             }
         }
 
