@@ -2697,9 +2697,9 @@ namespace Glance
     {
         private const int HOTKEY_ID_SPOTLIGHT = 9001;
         private const double CollapsedWidth = 216;
-        private const double CollapsedHeight = 38;
-        private const double ExpandedWidth = 416;
-        private const double ExpandedHeight = 212;
+        private const double CollapsedHeight = 36;
+        private const double ExpandedWidth = 426;
+        private const double ExpandedHeight = 216;
         private const int SlideCount = 6;
 
         public static MainWindow PrimaryInstance { get; private set; }
@@ -2850,7 +2850,7 @@ namespace Glance
         private TextBlock collapsedNetUpText;
 
         // Collapsed music mode (album art + live waveform, like iPhone)
-        private const double MusicCollapsedWidth = 216;
+        private const double MusicCollapsedWidth = 230;
         private Grid collapsedIdleLayout;
         private Grid collapsedMusicLayout;
         private Border collapsedArtBox;
@@ -3613,42 +3613,34 @@ namespace Glance
                 VerticalAlignment = VerticalAlignment.Top
             };
 
-            StackPanel notchRow = new StackPanel
+            rootGrid.MouseEnter += (s, e) =>
             {
-                Orientation = Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Top
+                collapseDelayTimer.Stop();
+                AnimateToExpanded();
+            };
+            rootGrid.MouseLeave += (s, e) =>
+            {
+                if (!IsPinned && !isInputFocused)
+                {
+                    collapseDelayTimer.Start();
+                }
             };
 
-            Path leftEar = new Path
-            {
-                Width = 16,
-                Height = 16,
-                VerticalAlignment = VerticalAlignment.Top,
-                Fill = notchBgBrush,
-                Data = Geometry.Parse("M 0,0 L 16,0 L 16,16 A 16,16 0 0 0 0,0 Z"),
-                SnapsToDevicePixels = true
-            };
 
-            Path rightEar = new Path
-            {
-                Width = 16,
-                Height = 16,
-                VerticalAlignment = VerticalAlignment.Top,
-                Fill = notchBgBrush,
-                Data = Geometry.Parse("M 0,0 L 16,0 A 16,16 0 0 0 0,16 Z"),
-                SnapsToDevicePixels = true
-            };
+
+
 
             notchBody = new Border
             {
                 Width = CollapsedWidth,
                 Height = CollapsedHeight,
                 Background = notchBgBrush,
-                BorderBrush = new SolidColorBrush(Color.FromArgb(28, 255, 255, 255)),
-                BorderThickness = new Thickness(1, 0, 1, 1),
-                CornerRadius = new CornerRadius(0, 0, 18, 18),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(32, 255, 255, 255)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(18),
+                HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(0, 8, 0, 0),
                 SnapsToDevicePixels = true,
                 AllowDrop = true,
                 Effect = new DropShadowEffect
@@ -3728,11 +3720,7 @@ namespace Glance
             innerContainer.Children.Add(expandedView);
             notchBody.Child = innerContainer;
 
-            notchRow.Children.Add(leftEar);
-            notchRow.Children.Add(notchBody);
-            notchRow.Children.Add(rightEar);
-
-            rootGrid.Children.Add(notchRow);
+            rootGrid.Children.Add(notchBody);
             Content = rootGrid;
         }
 
@@ -3743,7 +3731,7 @@ namespace Glance
             // ---- Idle layout: [Kiri: Baterai]  [Tengah: Jam]  [Kanan: Speed Wi-Fi (↓ / ↑)] ----
             collapsedIdleLayout = new Grid
             {
-                Margin = new Thickness(12, 0, 12, 2),
+                Margin = new Thickness(12, 0, 12, 0),
                 VerticalAlignment = VerticalAlignment.Stretch
             };
             collapsedIdleLayout.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -3751,7 +3739,7 @@ namespace Glance
             collapsedIdleLayout.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
             // 1. Kiri: Battery Ring Widget
-            Grid batRing = CreateBatteryRingWidget(24, 3.3, out collapsedBatteryArc, out collapsedBatteryBgRing);
+            Grid batRing = CreateBatteryRingWidget(20, 2.8, out collapsedBatteryArc, out collapsedBatteryBgRing);
             batRing.HorizontalAlignment = HorizontalAlignment.Left;
             batRing.VerticalAlignment = VerticalAlignment.Center;
             Grid.SetColumn(batRing, 0);
@@ -3761,8 +3749,8 @@ namespace Glance
             {
                 Text = "16:06",
                 Foreground = Brushes.White,
-                FontSize = 15,
-                FontWeight = FontWeights.Bold,
+                FontSize = 13.5,
+                FontWeight = FontWeights.SemiBold,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
             };
@@ -3779,7 +3767,7 @@ namespace Glance
             {
                 Text = "↓ 0 KB/s",
                 Foreground = new SolidColorBrush(Color.FromRgb(28, 231, 85)),
-                FontSize = 9.2,
+                FontSize = 8.8,
                 FontWeight = FontWeights.SemiBold,
                 TextAlignment = TextAlignment.Right
             };
@@ -3787,7 +3775,7 @@ namespace Glance
             {
                 Text = "↑ 0 KB/s",
                 Foreground = new SolidColorBrush(Color.FromRgb(165, 165, 178)),
-                FontSize = 9.2,
+                FontSize = 8.8,
                 FontWeight = FontWeights.SemiBold,
                 TextAlignment = TextAlignment.Right
             };
@@ -3802,7 +3790,7 @@ namespace Glance
             // ---- Music layout: mini album art + clock + live waveform (like iPhone) ----
             collapsedMusicLayout = new Grid
             {
-                Margin = new Thickness(12, 0, 12, 2),
+                Margin = new Thickness(10, 0, 10, 0),
                 VerticalAlignment = VerticalAlignment.Stretch,
                 Visibility = Visibility.Collapsed
             };
@@ -3814,18 +3802,21 @@ namespace Glance
             {
                 Width = 24,
                 Height = 24,
-                CornerRadius = new CornerRadius(6),
-                Background = new SolidColorBrush(Color.FromArgb(55, 255, 255, 255)),
+                CornerRadius = new CornerRadius(12),
+                Background = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(28, 255, 255, 255)),
+                BorderThickness = new Thickness(1),
                 HorizontalAlignment = HorizontalAlignment.Left,
-                VerticalAlignment = VerticalAlignment.Center
+                VerticalAlignment = VerticalAlignment.Center,
+                ClipToBounds = true
             };
             collapsedArtBrush = new ImageBrush { Stretch = Stretch.UniformToFill };
             collapsedArtPlaceholder = new Path
             {
                 Data = Geometry.Parse("M 12,3 L 12,13.55 C 11.41,13.21 10.73,13 10,13 C 7.79,13 6,14.79 6,17 C 6,19.21 7.79,21 10,21 C 12.21,21 14,19.21 14,17 L 14,7 L 18,7 L 18,3 L 12,3 Z"),
                 Fill = new SolidColorBrush(Color.FromRgb(190, 190, 200)),
-                Width = 12,
-                Height = 12,
+                Width = 11,
+                Height = 11,
                 Stretch = Stretch.Uniform,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
@@ -3837,8 +3828,8 @@ namespace Glance
             {
                 Text = "16:06",
                 Foreground = Brushes.White,
-                FontSize = 15,
-                FontWeight = FontWeights.Bold,
+                FontSize = 13.5,
+                FontWeight = FontWeights.SemiBold,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
             };
@@ -5718,10 +5709,10 @@ namespace Glance
             if (clockTimer != null) clockTimer.Interval = TimeSpan.FromMilliseconds(250);
             UpdateMediaTimelineUI();
 
-            notchBody.CornerRadius = new CornerRadius(0, 0, 26, 26);
+            notchBody.CornerRadius = new CornerRadius(26);
 
-            CubicEase ease = new CubicEase { EasingMode = EasingMode.EaseOut };
-            Duration dur = new Duration(TimeSpan.FromMilliseconds(300));
+            var ease = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.20 };
+            Duration dur = new Duration(TimeSpan.FromMilliseconds(290));
 
             notchBody.BeginAnimation(WidthProperty, new DoubleAnimation(ExpandedWidth, dur) { EasingFunction = ease });
             notchBody.BeginAnimation(HeightProperty, new DoubleAnimation(ExpandedHeight, dur) { EasingFunction = ease });
@@ -5743,10 +5734,10 @@ namespace Glance
 
             if (clockTimer != null) clockTimer.Interval = TimeSpan.FromMilliseconds(1000);
 
-            notchBody.CornerRadius = new CornerRadius(0, 0, 18, 18);
+            notchBody.CornerRadius = new CornerRadius(18);
 
-            CubicEase ease = new CubicEase { EasingMode = EasingMode.EaseOut };
-            Duration dur = new Duration(TimeSpan.FromMilliseconds(280));
+            var ease = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.16 };
+            Duration dur = new Duration(TimeSpan.FromMilliseconds(270));
 
             var widthAnim = new DoubleAnimation(CurrentCollapsedWidth, dur) { EasingFunction = ease };
             widthAnim.Completed += (s, e) => MemoryOptimizer.TrimMemory(force: true);
