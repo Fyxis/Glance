@@ -2853,13 +2853,16 @@ namespace Glance
         private TextBlock collapsedNetDownText;
         private TextBlock collapsedNetUpText;
 
-        // Collapsed music mode (album art + live waveform, like iPhone)
+        // Collapsed music mode (album art + lyrics + live waveform, like iPhone Dynamic Island)
         private const double MusicCollapsedWidth = 230;
+        private const double MusicLyricCollapsedWidth = 310;
         private Grid collapsedIdleLayout;
         private Grid collapsedMusicLayout;
         private Border collapsedArtBox;
         private ImageBrush collapsedArtBrush;
         private Path collapsedArtPlaceholder;
+        private Grid collapsedMusicMidGrid;
+        private TextBlock collapsedMusicLyricText;
         private TextBlock collapsedMusicTimeText;
         private Rectangle[] waveBars;
         private double[] waveLevels;
@@ -2869,10 +2872,16 @@ namespace Glance
         private DateTime lastPlayingSeenUtc = DateTime.MinValue;
         private readonly Random waveRng = new Random();
         private readonly SolidColorBrush waveBrush = new SolidColorBrush(Color.FromRgb(28, 231, 85));
+        private int waveformTickCount = 0;
 
         private double CurrentCollapsedWidth
         {
-            get { return isMusicMode ? MusicCollapsedWidth : CollapsedWidth; }
+            get
+            {
+                if (!isMusicMode) return CollapsedWidth;
+                bool hasLyric = !string.IsNullOrWhiteSpace(GetCurrentLyricText());
+                return hasLyric ? MusicLyricCollapsedWidth : MusicCollapsedWidth;
+            }
         }
 
         // Slide 3 & 4: Clipboard & Notes UI
@@ -3714,11 +3723,12 @@ namespace Glance
                 }
             };
 
-            Grid innerContainer = new Grid();
+            Grid innerContainer = new Grid { ClipToBounds = true };
             collapsedView = BuildCollapsedView();
             expandedView = BuildExpandedView();
             expandedView.Opacity = 0;
             expandedView.IsHitTestVisible = false;
+            expandedView.Visibility = Visibility.Collapsed;
 
             innerContainer.Children.Add(collapsedView);
             innerContainer.Children.Add(expandedView);
@@ -3791,7 +3801,7 @@ namespace Glance
             collapsedIdleLayout.Children.Add(collapsedTimeText);
             collapsedIdleLayout.Children.Add(netSpeedPanel);
 
-            // ---- Music layout: mini album art + clock + live waveform (like iPhone) ----
+            // ---- Music layout: [Logo Musik]  [Lirik / Jam]  [Waveform] ----
             collapsedMusicLayout = new Grid
             {
                 Margin = new Thickness(10, 0, 10, 0),
@@ -3802,23 +3812,25 @@ namespace Glance
             collapsedMusicLayout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             collapsedMusicLayout.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
+            // 1. Kiri: Logo Musik / Album Art Box (menggantikan baterai saat musik aktif)
             collapsedArtBox = new Border
             {
-                Width = 24,
-                Height = 24,
-                CornerRadius = new CornerRadius(12),
+                Width = 22,
+                Height = 22,
+                CornerRadius = new CornerRadius(11),
                 Background = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
                 BorderBrush = new SolidColorBrush(Color.FromArgb(28, 255, 255, 255)),
                 BorderThickness = new Thickness(1),
                 HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 6, 0),
                 ClipToBounds = true
             };
             collapsedArtBrush = new ImageBrush { Stretch = Stretch.UniformToFill };
             collapsedArtPlaceholder = new Path
             {
                 Data = Geometry.Parse("M 12,3 L 12,13.55 C 11.41,13.21 10.73,13 10,13 C 7.79,13 6,14.79 6,17 C 6,19.21 7.79,21 10,21 C 12.21,21 14,19.21 14,17 L 14,7 L 18,7 L 18,3 L 12,3 Z"),
-                Fill = new SolidColorBrush(Color.FromRgb(190, 190, 200)),
+                Fill = new SolidColorBrush(Color.FromRgb(200, 200, 210)),
                 Width = 11,
                 Height = 11,
                 Stretch = Stretch.Uniform,
@@ -3828,23 +3840,55 @@ namespace Glance
             collapsedArtBox.Child = collapsedArtPlaceholder;
             Grid.SetColumn(collapsedArtBox, 0);
 
+            // 2. Tengah: Grid Penampung Lirik & Jam
+            collapsedMusicMidGrid = new Grid
+            {
+                VerticalAlignment = VerticalAlignment.Stretch,
+                HorizontalAlignment = HorizontalAlignment.Stretch
+            };
+            collapsedMusicMidGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            collapsedMusicMidGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            // 2a. Lirik Berjalan (sebelah logo musik jika ada lirik)
+            collapsedMusicLyricText = new TextBlock
+            {
+                Text = "",
+                Foreground = Brushes.White,
+                FontSize = 11.5,
+                FontWeight = FontWeights.Medium,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(2, 0, 6, 0),
+                Visibility = Visibility.Collapsed
+            };
+            Grid.SetColumn(collapsedMusicLyricText, 0);
+
+            // 2b. Jam (di sebelah lirik jika ada lirik, atau di tengah jika lirik tidak ada)
             collapsedMusicTimeText = new TextBlock
             {
-                Text = "16:06",
+                Text = DateTime.Now.ToString("HH:mm", CultureInfo.InvariantCulture),
                 Foreground = Brushes.White,
                 FontSize = 13.5,
                 FontWeight = FontWeights.SemiBold,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
             };
-            Grid.SetColumn(collapsedMusicTimeText, 1);
+            Grid.SetColumn(collapsedMusicTimeText, 0);
+            Grid.SetColumnSpan(collapsedMusicTimeText, 2);
 
+            collapsedMusicMidGrid.Children.Add(collapsedMusicLyricText);
+            collapsedMusicMidGrid.Children.Add(collapsedMusicTimeText);
+            Grid.SetColumn(collapsedMusicMidGrid, 1);
+
+            // 3. Kanan: Wave Equalizer Audio
             StackPanel wavePanel = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
                 HorizontalAlignment = HorizontalAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Center,
                 Height = 18,
+                Margin = new Thickness(6, 0, 0, 0),
                 ToolTip = "Media playing"
             };
             int barCount = waveProfile.Length;
@@ -3869,7 +3913,7 @@ namespace Glance
             Grid.SetColumn(wavePanel, 2);
 
             collapsedMusicLayout.Children.Add(collapsedArtBox);
-            collapsedMusicLayout.Children.Add(collapsedMusicTimeText);
+            collapsedMusicLayout.Children.Add(collapsedMusicMidGrid);
             collapsedMusicLayout.Children.Add(wavePanel);
 
             root.Children.Add(collapsedIdleLayout);
@@ -5734,6 +5778,7 @@ namespace Glance
             collapsedView.BeginAnimation(OpacityProperty, new DoubleAnimation(0, TimeSpan.FromMilliseconds(120)));
             collapsedView.IsHitTestVisible = false;
 
+            expandedView.Visibility = Visibility.Visible;
             expandedView.IsHitTestVisible = true;
             expandedView.BeginAnimation(OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(220))
             {
@@ -5746,7 +5791,10 @@ namespace Glance
             if (!isExpanded) return;
             isExpanded = false;
 
-            if (clockTimer != null) clockTimer.Interval = TimeSpan.FromMilliseconds(1000);
+            if (clockTimer != null)
+            {
+                clockTimer.Interval = isMusicMode ? TimeSpan.FromMilliseconds(250) : TimeSpan.FromMilliseconds(1000);
+            }
 
             notchBody.CornerRadius = new CornerRadius(18);
 
@@ -5759,7 +5807,12 @@ namespace Glance
             notchBody.BeginAnimation(WidthProperty, widthAnim);
             notchBody.BeginAnimation(HeightProperty, new DoubleAnimation(CollapsedHeight, dur) { EasingFunction = ease });
 
-            expandedView.BeginAnimation(OpacityProperty, new DoubleAnimation(0, TimeSpan.FromMilliseconds(110)));
+            var fadeOut = new DoubleAnimation(0, TimeSpan.FromMilliseconds(110));
+            fadeOut.Completed += (s, e) =>
+            {
+                if (!isExpanded) expandedView.Visibility = Visibility.Collapsed;
+            };
+            expandedView.BeginAnimation(OpacityProperty, fadeOut);
             expandedView.IsHitTestVisible = false;
 
             collapsedView.IsHitTestVisible = true;
@@ -6093,6 +6146,10 @@ namespace Glance
             {
                 UpdateMediaTimelineUI();
             }
+            else if (isMusicMode)
+            {
+                UpdateCollapsedMusicUI();
+            }
 
             if (!IsCompanionWindow && CompanionInstance != null && CompanionInstance.IsVisible)
             {
@@ -6158,35 +6215,124 @@ namespace Glance
         // =======================================================
         // COLLAPSED MUSIC MODE + WAVEFORM ANIMATION
         // =======================================================
+        private string GetCurrentLyricText()
+        {
+            if (syncedLyrics == null || syncedLyrics.Count == 0) return "";
+            double pos = currentPos;
+            if (currentStatus == "Playing")
+            {
+                pos = Math.Min(currentDur, currentPos + (DateTime.UtcNow - lastPosSync).TotalSeconds);
+            }
+            string lyric = "";
+            double lineTime = -1;
+            for (int i = 0; i < syncedLyrics.Count; i++)
+            {
+                if (pos >= syncedLyrics[i].TimeSec)
+                {
+                    lyric = syncedLyrics[i].Text;
+                    lineTime = syncedLyrics[i].TimeSec;
+                }
+                else break;
+            }
+            if (lineTime >= 0 && (pos - lineTime) > 12.0)
+            {
+                return "";
+            }
+            return lyric ?? "";
+        }
+
+        private void UpdateCollapsedMusicUI()
+        {
+            if (collapsedMusicLayout == null || !isMusicMode) return;
+
+            string lyric = GetCurrentLyricText();
+            bool hasLyric = !string.IsNullOrWhiteSpace(lyric);
+
+            if (hasLyric)
+            {
+                if (collapsedMusicLyricText.Text != lyric)
+                {
+                    collapsedMusicLyricText.Text = lyric;
+                }
+                if (collapsedMusicLyricText.Visibility != Visibility.Visible)
+                {
+                    collapsedMusicLyricText.Visibility = Visibility.Visible;
+                }
+
+                // Posisi Jam di sebelah lirik (sebelah kanan lirik, sebelum waveform)
+                Grid.SetColumn(collapsedMusicTimeText, 1);
+                Grid.SetColumnSpan(collapsedMusicTimeText, 1);
+                collapsedMusicTimeText.HorizontalAlignment = HorizontalAlignment.Right;
+                collapsedMusicTimeText.FontSize = 12.0;
+                collapsedMusicTimeText.Foreground = new SolidColorBrush(Color.FromRgb(185, 185, 195));
+            }
+            else
+            {
+                if (collapsedMusicLyricText.Visibility != Visibility.Collapsed)
+                {
+                    collapsedMusicLyricText.Visibility = Visibility.Collapsed;
+                }
+
+                // Posisi Jam di tengah (sebelah logo musik, sebelum waveform)
+                Grid.SetColumn(collapsedMusicTimeText, 0);
+                Grid.SetColumnSpan(collapsedMusicTimeText, 2);
+                collapsedMusicTimeText.HorizontalAlignment = HorizontalAlignment.Center;
+                collapsedMusicTimeText.FontSize = 13.5;
+                collapsedMusicTimeText.Foreground = Brushes.White;
+            }
+
+            double targetWidth = hasLyric ? MusicLyricCollapsedWidth : MusicCollapsedWidth;
+            if (!isExpanded && Math.Abs(notchBody.Width - targetWidth) > 1.5)
+            {
+                notchBody.BeginAnimation(WidthProperty, new DoubleAnimation(targetWidth, TimeSpan.FromMilliseconds(300))
+                {
+                    EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.25 }
+                });
+            }
+        }
+
         private void UpdateCollapsedMusicMode()
         {
             if (collapsedMusicLayout == null) return;
 
             bool hasTrack = !string.IsNullOrWhiteSpace(currentTitle);
-            bool playingNow = hasTrack && currentStatus == "Playing";
+            bool audioPeakActive = HardwareController.GetPeakLevel() > 0.003f;
+            bool playingNow = hasTrack && (currentStatus == "Playing" || (audioPeakActive && currentStatus != "Stopped" && currentStatus != "Closed"));
             if (playingNow) lastPlayingSeenUtc = DateTime.UtcNow;
 
-            // Keep the music layout for a few seconds after pausing / track change to avoid flicker
+            // Pertahankan layout musik saat sedang play, atau 6 detik setelah jeda
             bool wantMusic = playingNow ||
-                             (isMusicMode && hasTrack && (DateTime.UtcNow - lastPlayingSeenUtc).TotalSeconds < 5.0);
-            if (wantMusic == isMusicMode) return;
+                             (isMusicMode && hasTrack && (DateTime.UtcNow - lastPlayingSeenUtc).TotalSeconds < 6.0);
 
-            isMusicMode = wantMusic;
-            collapsedIdleLayout.Visibility = isMusicMode ? Visibility.Collapsed : Visibility.Visible;
-            collapsedMusicLayout.Visibility = isMusicMode ? Visibility.Visible : Visibility.Collapsed;
-
-            if (waveformTimer != null)
+            if (wantMusic != isMusicMode)
             {
-                if (isMusicMode) waveformTimer.Start();
-                else waveformTimer.Stop();
+                isMusicMode = wantMusic;
+                collapsedIdleLayout.Visibility = isMusicMode ? Visibility.Collapsed : Visibility.Visible;
+                collapsedMusicLayout.Visibility = isMusicMode ? Visibility.Visible : Visibility.Collapsed;
+
+                if (waveformTimer != null)
+                {
+                    if (isMusicMode) waveformTimer.Start();
+                    else waveformTimer.Stop();
+                }
+
+                if (clockTimer != null)
+                {
+                    clockTimer.Interval = (isExpanded || isMusicMode) ? TimeSpan.FromMilliseconds(250) : TimeSpan.FromMilliseconds(1000);
+                }
+
+                if (!isExpanded)
+                {
+                    notchBody.BeginAnimation(WidthProperty, new DoubleAnimation(CurrentCollapsedWidth, TimeSpan.FromMilliseconds(340))
+                    {
+                        EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.25 }
+                    });
+                }
             }
 
-            if (!isExpanded)
+            if (isMusicMode)
             {
-                notchBody.BeginAnimation(WidthProperty, new DoubleAnimation(CurrentCollapsedWidth, TimeSpan.FromMilliseconds(340))
-                {
-                    EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.35 }
-                });
+                UpdateCollapsedMusicUI();
             }
         }
 
@@ -6194,8 +6340,14 @@ namespace Glance
         {
             if (waveBars == null || isExpanded) return;
 
-            bool playing = currentStatus == "Playing";
-            float peak = playing ? HardwareController.GetPeakLevel() : 0f;
+            waveformTickCount++;
+            if (waveformTickCount % 5 == 0)
+            {
+                UpdateCollapsedMusicUI();
+            }
+
+            float peak = HardwareController.GetPeakLevel();
+            bool playing = (currentStatus == "Playing") || (peak > 0.003f);
 
             for (int i = 0; i < waveBars.Length; i++)
             {
@@ -6447,6 +6599,10 @@ namespace Glance
                     if (parsedSynced.Count > 0)
                     {
                         syncedLyrics = parsedSynced;
+                        if (!IsCompanionWindow && CompanionInstance != null)
+                        {
+                            CompanionInstance.syncedLyrics = parsedSynced;
+                        }
                         foreach (var l in syncedLyrics)
                         {
                             double jumpSec = l.TimeSec;
@@ -6496,6 +6652,11 @@ namespace Glance
                             Margin = new Thickness(0, 22, 0, 0)
                         });
                     }
+
+                    if (isMusicMode)
+                    {
+                        UpdateCollapsedMusicUI();
+                    }
                 });
             });
         }
@@ -6536,6 +6697,22 @@ namespace Glance
                     }
 
                     var session = mgr != null ? mgr.GetCurrentSession() : null;
+                    if (session == null && mgr != null)
+                    {
+                        try
+                        {
+                            var sessions = mgr.GetSessions();
+                            if (sessions != null && sessions.Count > 0)
+                            {
+                                session = sessions.FirstOrDefault(s =>
+                                {
+                                    try { return s.GetPlaybackInfo()?.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing; }
+                                    catch { return false; }
+                                }) ?? sessions.FirstOrDefault();
+                            }
+                        }
+                        catch { }
+                    }
 
                     if (session != null)
                     {
@@ -6726,6 +6903,11 @@ namespace Glance
             currentDur = snap.Duration;
             lastPosSync = DateTime.UtcNow;
 
+            if (!string.IsNullOrWhiteSpace(currentTitle) && (currentTitle + "|" + currentArtist) != oldKey)
+            {
+                FetchLyricsIfNeeded();
+            }
+
             if (snap.ThumbnailChanged)
             {
                 if (snap.ThumbnailBytes != null && snap.ThumbnailBytes.Length > 0)
@@ -6797,11 +6979,6 @@ namespace Glance
                         ? "M 6,19 L 10,19 L 10,5 L 6,5 Z M 14,5 L 14,19 L 18,19 L 18,5 Z"
                         : "M 8,5 L 8,19 L 19,12 Z"
                 );
-
-                if (showLyrics && (currentTitle + "|" + currentArtist) != oldKey)
-                {
-                    FetchLyricsIfNeeded();
-                }
 
                 // Slide 1: Top Row
                 sysBatVal.Text = batPct + "%";
