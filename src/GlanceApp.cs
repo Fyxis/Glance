@@ -946,6 +946,9 @@ namespace Glance
             WindowStyle = WindowStyle.None;
             AllowsTransparency = true;
             Background = Brushes.Transparent;
+            FontFamily = new FontFamily("SF Pro Display, Segoe UI Variable Display, Segoe UI, -apple-system, sans-serif");
+            TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
+            TextOptions.SetTextRenderingMode(this, TextRenderingMode.ClearType);
             Topmost = true;
             Closed += (s, e) => MemoryOptimizer.TrimMemory(force: true);
             ShowInTaskbar = false;
@@ -1537,6 +1540,9 @@ namespace Glance
             WindowStyle = WindowStyle.None;
             AllowsTransparency = true;
             Background = Brushes.Transparent;
+            FontFamily = new FontFamily("SF Pro Display, Segoe UI Variable Display, Segoe UI, -apple-system, sans-serif");
+            TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
+            TextOptions.SetTextRenderingMode(this, TextRenderingMode.ClearType);
             Topmost = true;
             Closed += (s, e) => MemoryOptimizer.TrimMemory(force: true);
 
@@ -2763,7 +2769,7 @@ namespace Glance
         private Ellipse collapsedBatteryBgRing;
         private Ellipse expandedBatteryBgRing;
         private Border pinBtnBorder;
-        private TextBlock pinBtnIcon;
+        private Path pinBtnIcon;
 
         // Slides & Dynamic Dots
         private Grid[] slidePanels = new Grid[SlideCount];
@@ -3006,6 +3012,9 @@ namespace Glance
             WindowStyle = WindowStyle.None;
             AllowsTransparency = true;
             Background = Brushes.Transparent;
+            FontFamily = new FontFamily("SF Pro Display, Segoe UI Variable Display, Segoe UI, -apple-system, sans-serif");
+            TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
+            TextOptions.SetTextRenderingMode(this, TextRenderingMode.ClearType);
             Topmost = true;
             Closed += (s, e) => MemoryOptimizer.TrimMemory(force: true);
             ShowInTaskbar = false;
@@ -3093,7 +3102,7 @@ namespace Glance
             BackgroundAlpha = alpha;
             if (notchBgBrush != null)
             {
-                notchBgBrush.Color = Color.FromArgb(BackgroundAlpha, 6, 6, 10);
+                notchBgBrush.Color = Color.FromArgb(BackgroundAlpha, 5, 5, 8);
             }
             if (!IsCompanionWindow && CompanionInstance != null)
             {
@@ -3562,11 +3571,14 @@ namespace Glance
         {
             IsPinned = pinned;
             pinBtnBorder.Background = IsPinned
-                ? new SolidColorBrush(Color.FromArgb(55, 28, 231, 85))
+                ? new SolidColorBrush(Color.FromArgb(50, 28, 231, 85))
                 : Brushes.Transparent;
-            pinBtnIcon.Foreground = IsPinned
-                ? new SolidColorBrush(Color.FromRgb(28, 231, 85))
-                : new SolidColorBrush(Color.FromRgb(140, 140, 150));
+            if (pinBtnIcon != null)
+            {
+                pinBtnIcon.Fill = IsPinned
+                    ? new SolidColorBrush(Color.FromRgb(28, 231, 85))
+                    : new SolidColorBrush(Color.FromRgb(165, 165, 175));
+            }
 
             if (!IsCompanionWindow)
             {
@@ -3593,7 +3605,7 @@ namespace Glance
 
         private void BuildUI()
         {
-            notchBgBrush = new SolidColorBrush(Color.FromArgb(BackgroundAlpha, 6, 6, 10));
+            notchBgBrush = new SolidColorBrush(Color.FromArgb(BackgroundAlpha, 5, 5, 8));
 
             Grid rootGrid = new Grid
             {
@@ -3633,12 +3645,20 @@ namespace Glance
                 Width = CollapsedWidth,
                 Height = CollapsedHeight,
                 Background = notchBgBrush,
-                BorderBrush = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
-                BorderThickness = new Thickness(0, 0, 0, 1),
-                CornerRadius = new CornerRadius(0, 0, 19, 19),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(28, 255, 255, 255)),
+                BorderThickness = new Thickness(1, 0, 1, 1),
+                CornerRadius = new CornerRadius(0, 0, 18, 18),
                 VerticalAlignment = VerticalAlignment.Top,
                 SnapsToDevicePixels = true,
-                AllowDrop = true
+                AllowDrop = true,
+                Effect = new DropShadowEffect
+                {
+                    BlurRadius = 24,
+                    ShadowDepth = 4,
+                    Direction = 270,
+                    Opacity = 0.52,
+                    Color = Colors.Black
+                }
             };
 
             notchBody.DragEnter += (s, e) =>
@@ -3661,13 +3681,13 @@ namespace Glance
             };
             notchBody.DragLeave += (s, e) =>
             {
-                notchBody.BorderBrush = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255));
-                notchBody.BorderThickness = new Thickness(0, 0, 0, 1);
+                notchBody.BorderBrush = new SolidColorBrush(Color.FromArgb(28, 255, 255, 255));
+                notchBody.BorderThickness = new Thickness(1, 0, 1, 1);
             };
             notchBody.Drop += (s, e) =>
             {
-                notchBody.BorderBrush = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255));
-                notchBody.BorderThickness = new Thickness(0, 0, 0, 1);
+                notchBody.BorderBrush = new SolidColorBrush(Color.FromArgb(28, 255, 255, 255));
+                notchBody.BorderThickness = new Thickness(1, 0, 1, 1);
                 if (e.Data.GetDataPresent(DataFormats.FileDrop))
                 {
                     string[] files = e.Data.GetData(DataFormats.FileDrop) as string[];
@@ -3877,9 +3897,9 @@ namespace Glance
             // Top-Left Search Button (Quick trigger for Spotlight Search)
             searchQuickBtn = new Border
             {
-                Width = 22,
-                Height = 22,
-                CornerRadius = new CornerRadius(11),
+                Width = 24,
+                Height = 24,
+                CornerRadius = new CornerRadius(12),
                 Background = Brushes.Transparent,
                 HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -3887,17 +3907,30 @@ namespace Glance
                 ToolTip = "Glance Search (" + HotkeyDisplay + ")",
                 Visibility = (IsSearchInstalled && IsSearchEnabled) ? Visibility.Visible : Visibility.Collapsed
             };
-            TextBlock searchQuickIcon = new TextBlock
+            Path searchQuickIcon = new Path
             {
-                Text = "🔍",
-                FontSize = 10.5,
-                Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 160)),
+                Data = Geometry.Parse("M 5.8 1.5 A 4.3 4.3 0 1 1 1.5 5.8 A 4.3 4.3 0 0 1 5.8 1.5 Z M 9 9 L 12.5 12.5"),
+                Stroke = new SolidColorBrush(Color.FromRgb(175, 175, 185)),
+                StrokeThickness = 1.6,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
+                Width = 11.5,
+                Height = 11.5,
+                Stretch = Stretch.Uniform,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
             };
             searchQuickBtn.Child = searchQuickIcon;
-            searchQuickBtn.MouseEnter += (s, e) => searchQuickIcon.Foreground = Brushes.White;
-            searchQuickBtn.MouseLeave += (s, e) => searchQuickIcon.Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 160));
+            searchQuickBtn.MouseEnter += (s, e) =>
+            {
+                searchQuickBtn.Background = new SolidColorBrush(Color.FromArgb(32, 255, 255, 255));
+                searchQuickIcon.Stroke = Brushes.White;
+            };
+            searchQuickBtn.MouseLeave += (s, e) =>
+            {
+                searchQuickBtn.Background = Brushes.Transparent;
+                searchQuickIcon.Stroke = new SolidColorBrush(Color.FromRgb(175, 175, 185));
+            };
             searchQuickBtn.MouseLeftButtonUp += (s, e) =>
             {
                 e.Handled = true;
@@ -3913,24 +3946,24 @@ namespace Glance
             };
 
             Grid smallBatRing = CreateBatteryRingWidget(18, 2.8, out expandedBatteryArc, out expandedBatteryBgRing);
-            smallBatRing.Margin = new Thickness(0, 0, 7, 0);
+            smallBatRing.Margin = new Thickness(0, 0, 8, 0);
 
             expandedDateText = new TextBlock
             {
                 Text = "Fri 23 Oct 2026",
-                Foreground = new SolidColorBrush(Color.FromRgb(235, 235, 240)),
-                FontSize = 12.5,
+                Foreground = new SolidColorBrush(Color.FromRgb(165, 165, 178)),
+                FontSize = 12,
                 FontWeight = FontWeights.Medium,
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 6, 0)
+                Margin = new Thickness(0, 0, 7, 0)
             };
 
             expandedTimeText = new TextBlock
             {
                 Text = "11:54",
                 Foreground = Brushes.White,
-                FontSize = 12.5,
-                FontWeight = FontWeights.Bold,
+                FontSize = 12,
+                FontWeight = FontWeights.SemiBold,
                 VerticalAlignment = VerticalAlignment.Center
             };
 
@@ -3949,25 +3982,35 @@ namespace Glance
 
             Border settingsBtn = new Border
             {
-                Width = 22,
-                Height = 22,
-                CornerRadius = new CornerRadius(11),
+                Width = 24,
+                Height = 24,
+                CornerRadius = new CornerRadius(12),
                 Background = Brushes.Transparent,
                 Cursor = Cursors.Hand,
                 ToolTip = "Glance Settings",
-                Margin = new Thickness(0, 0, 4, 0)
+                Margin = new Thickness(0, 0, 3, 0)
             };
-            TextBlock gearIcon = new TextBlock
+            Path gearIcon = new Path
             {
-                Text = "⚙",
-                FontSize = 12,
-                Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 160)),
+                Data = Geometry.Parse("M 6 1 L 8 1 L 8.3 2.5 A 5 5 0 0 1 9.5 3.2 L 10.9 2.5 L 12.3 3.9 L 11.6 5.3 A 5 5 0 0 1 12.3 6.5 L 13.8 6.8 L 13.8 8.8 L 12.3 9.1 A 5 5 0 0 1 11.6 10.3 L 12.3 11.7 L 10.9 13.1 L 9.5 12.4 A 5 5 0 0 1 8.3 13.1 L 8 14.6 L 6 14.6 L 5.7 13.1 A 5 5 0 0 1 4.5 12.4 L 3.1 13.1 L 1.7 11.7 L 2.4 10.3 A 5 5 0 0 1 1.7 9.1 L 0.2 8.8 L 0.2 6.8 L 1.7 6.5 A 5 5 0 0 1 2.4 5.3 L 1.7 3.9 L 3.1 2.5 L 4.5 3.2 A 5 5 0 0 1 5.7 2.5 Z M 7 5 A 2.5 2.5 0 1 0 7 10 A 2.5 2.5 0 0 0 7 5 Z"),
+                Fill = new SolidColorBrush(Color.FromRgb(175, 175, 185)),
+                Width = 12.5,
+                Height = 12.5,
+                Stretch = Stretch.Uniform,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
             };
             settingsBtn.Child = gearIcon;
-            settingsBtn.MouseEnter += (s, e) => gearIcon.Foreground = Brushes.White;
-            settingsBtn.MouseLeave += (s, e) => gearIcon.Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 160));
+            settingsBtn.MouseEnter += (s, e) =>
+            {
+                settingsBtn.Background = new SolidColorBrush(Color.FromArgb(32, 255, 255, 255));
+                gearIcon.Fill = Brushes.White;
+            };
+            settingsBtn.MouseLeave += (s, e) =>
+            {
+                settingsBtn.Background = Brushes.Transparent;
+                gearIcon.Fill = new SolidColorBrush(Color.FromRgb(175, 175, 185));
+            };
             settingsBtn.MouseLeftButtonUp += (s, e) =>
             {
                 e.Handled = true;
@@ -3976,22 +4019,34 @@ namespace Glance
 
             pinBtnBorder = new Border
             {
-                Width = 22,
-                Height = 22,
-                CornerRadius = new CornerRadius(11),
+                Width = 24,
+                Height = 24,
+                CornerRadius = new CornerRadius(12),
                 Background = Brushes.Transparent,
                 Cursor = Cursors.Hand,
                 ToolTip = "Pin expanded HUD"
             };
-            pinBtnIcon = new TextBlock
+            pinBtnIcon = new Path
             {
-                Text = "📌",
-                FontSize = 10.5,
-                Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 160)),
+                Data = Geometry.Parse("M 3.5 1.5 L 10.5 1.5 L 9.5 5.5 L 11.5 7.5 L 7.5 7.5 L 6.5 13 L 5.5 7.5 L 1.5 7.5 L 3.5 5.5 Z"),
+                Fill = new SolidColorBrush(Color.FromRgb(175, 175, 185)),
+                Width = 11,
+                Height = 11,
+                Stretch = Stretch.Uniform,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
             };
             pinBtnBorder.Child = pinBtnIcon;
+            pinBtnBorder.MouseEnter += (s, e) =>
+            {
+                pinBtnBorder.Background = new SolidColorBrush(Color.FromArgb(32, 255, 255, 255));
+                if (!IsPinned) pinBtnIcon.Fill = Brushes.White;
+            };
+            pinBtnBorder.MouseLeave += (s, e) =>
+            {
+                pinBtnBorder.Background = IsPinned ? new SolidColorBrush(Color.FromArgb(50, 28, 231, 85)) : Brushes.Transparent;
+                if (!IsPinned) pinBtnIcon.Fill = new SolidColorBrush(Color.FromRgb(175, 175, 185));
+            };
             pinBtnBorder.MouseLeftButtonUp += (s, e) =>
             {
                 e.Handled = true;
@@ -4100,8 +4155,8 @@ namespace Glance
                 Width = 46,
                 Height = 46,
                 CornerRadius = new CornerRadius(10),
-                Background = new SolidColorBrush(Color.FromArgb(65, 255, 255, 255)),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
+                Background = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(28, 255, 255, 255)),
                 BorderThickness = new Thickness(1),
                 HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Center
@@ -4243,13 +4298,15 @@ namespace Glance
             btnPrev.MouseLeftButtonUp += (s, e) => { e.Handled = true; pendingCommand = "prev"; };
 
             Border btnPlay = CreateMediaIconBtn("M 8,5 L 8,19 L 19,12 Z", 15, "Play / Pause", out playPauseIconPath);
-            btnPlay.Width = 32;
-            btnPlay.Height = 32;
-            btnPlay.CornerRadius = new CornerRadius(16);
-            btnPlay.Background = new SolidColorBrush(Color.FromArgb(35, 255, 255, 255));
+            btnPlay.Width = 34;
+            btnPlay.Height = 34;
+            btnPlay.CornerRadius = new CornerRadius(17);
+            btnPlay.Background = new SolidColorBrush(Color.FromArgb(45, 255, 255, 255));
+            btnPlay.BorderBrush = new SolidColorBrush(Color.FromArgb(28, 255, 255, 255));
+            btnPlay.BorderThickness = new Thickness(1);
             btnPlay.Margin = new Thickness(0, 0, 6, 0);
-            btnPlay.MouseEnter += (s, e) => btnPlay.Background = new SolidColorBrush(Color.FromArgb(60, 255, 255, 255));
-            btnPlay.MouseLeave += (s, e) => btnPlay.Background = new SolidColorBrush(Color.FromArgb(35, 255, 255, 255));
+            btnPlay.MouseEnter += (s, e) => btnPlay.Background = new SolidColorBrush(Color.FromArgb(75, 255, 255, 255));
+            btnPlay.MouseLeave += (s, e) => btnPlay.Background = new SolidColorBrush(Color.FromArgb(45, 255, 255, 255));
             btnPlay.MouseLeftButtonUp += (s, e) => { e.Handled = true; pendingCommand = "play-pause"; };
 
             Border btnNext = CreateMediaIconBtn("M 4,18 L 12.5,12 L 4,6 Z M 13,6 L 13,18 L 21.5,12 Z", 14, "Next Track");
@@ -4592,11 +4649,11 @@ namespace Glance
         {
             Border card = new Border
             {
-                Background = new SolidColorBrush(Color.FromArgb(18, 255, 255, 255)),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(42, 255, 255, 255)),
+                Background = new SolidColorBrush(Color.FromArgb(24, 255, 255, 255)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(28, 255, 255, 255)),
                 BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(11),
-                Padding = new Thickness(9, 6, 9, 6)
+                CornerRadius = new CornerRadius(14),
+                Padding = new Thickness(10, 6, 10, 6)
             };
 
             StackPanel sp = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
@@ -4623,17 +4680,17 @@ namespace Glance
 
             Border barTrack = new Border
             {
-                Height = 4.5,
-                CornerRadius = new CornerRadius(2.2),
-                Background = new SolidColorBrush(Color.FromArgb(55, 255, 255, 255)),
+                Height = 6,
+                CornerRadius = new CornerRadius(3),
+                Background = new SolidColorBrush(Color.FromArgb(50, 255, 255, 255)),
                 Margin = new Thickness(0, 5, 0, 5),
                 ClipToBounds = true
             };
             fillBar = new Border
             {
-                Height = 4.5,
+                Height = 6,
                 Width = 0,
-                CornerRadius = new CornerRadius(2.2),
+                CornerRadius = new CornerRadius(3),
                 Background = new SolidColorBrush(accent),
                 HorizontalAlignment = HorizontalAlignment.Left
             };
@@ -4719,11 +4776,11 @@ namespace Glance
 
             Border wifiCard = new Border
             {
-                Background = new SolidColorBrush(Color.FromArgb(18, 255, 255, 255)),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(42, 255, 255, 255)),
+                Background = new SolidColorBrush(Color.FromArgb(24, 255, 255, 255)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(28, 255, 255, 255)),
                 BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(11),
-                Padding = new Thickness(11, 6, 11, 6),
+                CornerRadius = new CornerRadius(14),
+                Padding = new Thickness(12, 6, 12, 6),
                 Cursor = Cursors.Hand,
                 ToolTip = "Click to open Windows Wi-Fi Settings"
             };
@@ -4893,11 +4950,11 @@ namespace Glance
         {
             Border card = new Border
             {
-                Background = new SolidColorBrush(Color.FromArgb(18, 255, 255, 255)),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(42, 255, 255, 255)),
+                Background = new SolidColorBrush(Color.FromArgb(24, 255, 255, 255)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(28, 255, 255, 255)),
                 BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(11),
-                Padding = new Thickness(11, 5, 11, 5)
+                CornerRadius = new CornerRadius(14),
+                Padding = new Thickness(12, 5, 12, 5)
             };
 
             Grid row = new Grid { VerticalAlignment = VerticalAlignment.Center };
@@ -4928,18 +4985,18 @@ namespace Glance
 
             trackBorder = new Border
             {
-                Height = 8,
-                CornerRadius = new CornerRadius(4),
-                Background = new SolidColorBrush(Color.FromArgb(60, 255, 255, 255)),
+                Height = 11,
+                CornerRadius = new CornerRadius(5.5),
+                Background = new SolidColorBrush(Color.FromArgb(50, 255, 255, 255)),
                 VerticalAlignment = VerticalAlignment.Center,
                 Cursor = Cursors.Hand,
                 ClipToBounds = true
             };
             fillBorder = new Border
             {
-                Height = 8,
+                Height = 11,
                 Width = 0,
-                CornerRadius = new CornerRadius(4),
+                CornerRadius = new CornerRadius(5.5),
                 Background = new SolidColorBrush(accent),
                 HorizontalAlignment = HorizontalAlignment.Left
             };
@@ -5579,30 +5636,40 @@ namespace Glance
         {
             Border b = new Border
             {
-                Width = 22,
-                Height = 22,
-                CornerRadius = new CornerRadius(11),
-                Background = new SolidColorBrush(Color.FromArgb(75, 255, 255, 255)),
+                Width = 24,
+                Height = 24,
+                CornerRadius = new CornerRadius(12),
+                Background = new SolidColorBrush(Color.FromArgb(30, 255, 255, 255)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(28, 255, 255, 255)),
+                BorderThickness = new Thickness(1),
                 Cursor = Cursors.Hand,
                 ToolTip = isLeft ? "Previous Slide (Shift + Scroll Up)" : "Next Slide (Shift + Scroll Down)"
             };
             Path arrow = new Path
             {
-                Data = Geometry.Parse(isLeft ? "M 14,6 L 8,12 L 14,18" : "M 10,6 L 16,12 L 10,18"),
-                Stroke = Brushes.White,
-                StrokeThickness = 2.2,
+                Data = Geometry.Parse(isLeft ? "M 13.5,6 L 7.5,12 L 13.5,18" : "M 8.5,6 L 14.5,12 L 8.5,18"),
+                Stroke = new SolidColorBrush(Color.FromRgb(215, 215, 225)),
+                StrokeThickness = 2.0,
                 StrokeStartLineCap = PenLineCap.Round,
                 StrokeEndLineCap = PenLineCap.Round,
                 StrokeLineJoin = PenLineJoin.Round,
-                Width = 11,
-                Height = 11,
+                Width = 9.5,
+                Height = 9.5,
                 Stretch = Stretch.Uniform,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
             };
             b.Child = arrow;
-            b.MouseEnter += (s, e) => b.Background = new SolidColorBrush(Color.FromArgb(120, 255, 255, 255));
-            b.MouseLeave += (s, e) => b.Background = new SolidColorBrush(Color.FromArgb(75, 255, 255, 255));
+            b.MouseEnter += (s, e) =>
+            {
+                b.Background = new SolidColorBrush(Color.FromArgb(70, 255, 255, 255));
+                arrow.Stroke = Brushes.White;
+            };
+            b.MouseLeave += (s, e) =>
+            {
+                b.Background = new SolidColorBrush(Color.FromArgb(30, 255, 255, 255));
+                arrow.Stroke = new SolidColorBrush(Color.FromRgb(215, 215, 225));
+            };
             return b;
         }
 
@@ -5651,7 +5718,7 @@ namespace Glance
             if (clockTimer != null) clockTimer.Interval = TimeSpan.FromMilliseconds(250);
             UpdateMediaTimelineUI();
 
-            notchBody.CornerRadius = new CornerRadius(0, 0, 32, 32);
+            notchBody.CornerRadius = new CornerRadius(0, 0, 26, 26);
 
             CubicEase ease = new CubicEase { EasingMode = EasingMode.EaseOut };
             Duration dur = new Duration(TimeSpan.FromMilliseconds(300));
@@ -5676,7 +5743,7 @@ namespace Glance
 
             if (clockTimer != null) clockTimer.Interval = TimeSpan.FromMilliseconds(1000);
 
-            notchBody.CornerRadius = new CornerRadius(0, 0, 19, 19);
+            notchBody.CornerRadius = new CornerRadius(0, 0, 18, 18);
 
             CubicEase ease = new CubicEase { EasingMode = EasingMode.EaseOut };
             Duration dur = new Duration(TimeSpan.FromMilliseconds(280));
