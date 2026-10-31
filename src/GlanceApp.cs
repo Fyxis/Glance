@@ -9958,15 +9958,16 @@ namespace Glance
             try
             {
                 lyricsStack.UpdateLayout();
+                lyricsScroll.UpdateLayout();
             }
             catch { }
 
-            double itemTop = 0;
+            double itemTop = lyricsStack.Margin.Top;
             try
             {
                 GeneralTransform gt = targetElement.TransformToAncestor(lyricsStack);
                 Point pt = gt.Transform(new Point(0, 0));
-                itemTop = pt.Y;
+                itemTop = lyricsStack.Margin.Top + pt.Y;
             }
             catch
             {
@@ -9987,7 +9988,10 @@ namespace Glance
 
             double targetOffset = itemCenter - (viewportHeight / 2.0);
             if (targetOffset < 0) targetOffset = 0;
-            if (targetOffset > lyricsScroll.ScrollableHeight) targetOffset = lyricsScroll.ScrollableHeight;
+            if (lyricsScroll.ScrollableHeight > 0 && targetOffset > lyricsScroll.ScrollableHeight)
+            {
+                targetOffset = lyricsScroll.ScrollableHeight;
+            }
 
             if (!animate || Math.Abs(lyricsScroll.VerticalOffset - targetOffset) < 1.0)
             {
@@ -10514,6 +10518,7 @@ namespace Glance
                                 pendingSeekSec = jumpSec;
                                 currentPos = jumpSec;
                                 lastPosSync = DateTime.UtcNow;
+                                activeLyricIndex = -1;
                                 UpdateMediaTimelineUI();
                             };
                             lyricsStack.Children.Add(tb);
