@@ -102,6 +102,10 @@ namespace Glance
 
     public class LrcSearchItem
     {
+        public string trackName { get; set; }
+        public string artistName { get; set; }
+        public string albumName { get; set; }
+        public double duration { get; set; }
         public string syncedLyrics { get; set; }
         public string plainLyrics { get; set; }
     }
@@ -234,6 +238,8 @@ namespace Glance
         public string Artist = "";
         public string Status = "None";
         public double Position = 0;
+        public double RawPosition = 0;
+        public bool HasValidLastUpdated = false;
         public double Duration = 0;
         public byte[] ThumbnailBytes = null;
         public bool ThumbnailChanged = false;
@@ -6464,9 +6470,11 @@ namespace Glance
         private string currentStatus = "None";
         private double currentPos = 0;
         private double currentDur = 0;
+        private double lastRawSmtcPos = -1;
         private DateTime lastPosSync = DateTime.UtcNow;
         private bool showLyrics = false;
         private string loadedLyricsKey = "";
+        private double loadedLyricsTrackDur = 0;
         private List<LyricLine> syncedLyrics = new List<LyricLine>();
         private int activeLyricIndex = -1;
         private DispatcherTimer lyricScrollAnimTimer;
@@ -10061,10 +10069,11 @@ namespace Glance
 
             if (showLyrics && syncedLyrics.Count > 0)
             {
+                double lyricPos = pos + 0.25;
                 int idx = -1;
                 for (int i = 0; i < syncedLyrics.Count; i++)
                 {
-                    if (pos >= syncedLyrics[i].TimeSec) idx = i;
+                    if (lyricPos >= syncedLyrics[i].TimeSec) idx = i;
                     else break;
                 }
                 if (idx != activeLyricIndex && idx >= 0 && idx < lyricsStack.Children.Count)
@@ -10097,11 +10106,12 @@ namespace Glance
             {
                 pos = Math.Min(currentDur, currentPos + (DateTime.UtcNow - lastPosSync).TotalSeconds);
             }
+            double lyricPos = pos + 0.25;
             string lyric = "";
             double lineTime = -1;
             for (int i = 0; i < syncedLyrics.Count; i++)
             {
-                if (pos >= syncedLyrics[i].TimeSec)
+                if (lyricPos >= syncedLyrics[i].TimeSec)
                 {
                     lyric = syncedLyrics[i].Text;
                     lineTime = syncedLyrics[i].TimeSec;
@@ -10379,6 +10389,80 @@ namespace Glance
             }
         }
 
+        private List<LrcSearchItem> FetchLrcCandidates(string url)
+        {
+            try
+            {
+                using (var req = new HttpRequestMessage(HttpMethod.Get, url))
+                {
+                    req.Headers.TryAddWithoutValidation("User-Agent", "Glance/1.0");
+                    using (var resp = http.Send(req))
+                    {
+                        if (resp.IsSuccessStatusCode)
+                        {
+                            using (var sr = new StreamReader(resp.Content.ReadAsStream(), Encoding.UTF8))
+                            {
+                                string body = sr.ReadToEnd();
+                                var items = json.Deserialize<List<LrcSearchItem>>(body);
+                                if (items != null) return items;
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
+            return new List<LrcSearchItem>();
+        }
+
+        private static double ScoreLyricCandidate(LrcSearchItem item, string rawTitle, string cleanTitle, string cleanArtist, double targetDur)
+        {
+            if (item == null) return -9999.0;
+            bool hasSynced = !string.IsNullOrWhiteSpace(item.syncedLyrics);
+            bool hasPlain = !string.IsNullOrWhiteSpace(item.plainLyrics);
+            if (!hasSynced && !hasPlain) return -9999.0;
+
+            double score = hasSynced ? 500.0 : 100.0;
+
+            if (targetDur > 10.0 && item.duration > 10.0)
+            {
+                double diff = Math.Abs(item.duration - targetDur);
+                if (diff <= 1.5) score += 160.0 - (diff * 10.0);
+                else if (diff <= 3.0) score += 110.0 - (diff * 12.0);
+                else if (diff <= 6.0) score += 40.0 - (diff * 5.0);
+                else score -= Math.Min(220.0, diff * 8.0);
+            }
+
+            string itemTrack = (item.trackName ?? "").Trim();
+            string itemArtist = (item.artistName ?? "").Trim();
+            string itemAlbum = (item.albumName ?? "").Trim();
+
+            if (!string.IsNullOrEmpty(cleanTitle) && !string.IsNullOrEmpty(itemTrack))
+            {
+                if (string.Equals(itemTrack, cleanTitle, StringComparison.OrdinalIgnoreCase)) score += 35.0;
+                else if (itemTrack.IndexOf(cleanTitle, StringComparison.OrdinalIgnoreCase) >= 0) score += 15.0;
+            }
+
+            if (!string.IsNullOrEmpty(cleanArtist) && !string.IsNullOrEmpty(itemArtist))
+            {
+                if (string.Equals(itemArtist, cleanArtist, StringComparison.OrdinalIgnoreCase)) score += 35.0;
+                else if (itemArtist.IndexOf(cleanArtist, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                         cleanArtist.IndexOf(itemArtist, StringComparison.OrdinalIgnoreCase) >= 0) score += 25.0;
+            }
+
+            string combinedMeta = (itemTrack + " " + itemAlbum).ToLowerInvariant();
+            string rawLower = (rawTitle ?? "").ToLowerInvariant();
+            string[] variantKeywords = { "slowed", "reverb", "sped up", "nightcore", "8d", "chopped", "instrumental", "karaoke", "live", "remix", "acoustic" };
+            foreach (string kw in variantKeywords)
+            {
+                if (combinedMeta.Contains(kw) && !rawLower.Contains(kw))
+                {
+                    score -= 120.0;
+                }
+            }
+
+            return score;
+        }
+
         private void FetchLyricsIfNeeded()
         {
             string title = currentTitle;
@@ -10386,6 +10470,7 @@ namespace Glance
             if (string.IsNullOrWhiteSpace(title))
             {
                 loadedLyricsKey = "";
+                loadedLyricsTrackDur = 0;
                 syncedLyrics.Clear();
                 lyricsHeaderText.Text = "Lyrics";
                 lyricsStack.Margin = new Thickness(0);
@@ -10414,6 +10499,7 @@ namespace Glance
                 return;
             }
             loadedLyricsKey = key;
+            loadedLyricsTrackDur = currentDur;
             syncedLyrics.Clear();
             activeLyricIndex = -1;
 
@@ -10431,60 +10517,69 @@ namespace Glance
 
             Task.Run(() =>
             {
-                string cleanTitle = Regex.Replace(title, @"\s*(\((feat|ft|with|official|video|audio|lyrics).*?\)|\[.*?\])", "", RegexOptions.IgnoreCase).Trim();
-                string cleanArtist = Regex.Replace(artist ?? "", @"\s*[,&].*$", "").Trim();
-                string url = "https://lrclib.net/api/search?q=" + Uri.EscapeDataString((cleanTitle + " " + cleanArtist).Trim());
+                for (int w = 0; w < 7 && currentDur <= 0; w++)
+                {
+                    Thread.Sleep(50);
+                }
+                double targetDur = currentDur;
+                loadedLyricsTrackDur = targetDur;
+
+                string cleanTitle = Regex.Replace(title, @"\s*(\((feat|ft|with|official|video|audio|lyrics|visualizer|explicit|remaster).*?\)|\[.*?\])", "", RegexOptions.IgnoreCase).Trim();
+                string cleanArtist = Regex.Replace(artist ?? "", @"\s*(- Topic|VEVO)\b", "", RegexOptions.IgnoreCase).Trim();
+                cleanArtist = Regex.Replace(cleanArtist, @"\s*[,&].*$", "").Trim();
+
+                List<LrcSearchItem> candidates = new List<LrcSearchItem>();
+                if (!string.IsNullOrEmpty(cleanTitle) && !string.IsNullOrEmpty(cleanArtist))
+                {
+                    string structuredUrl = "https://lrclib.net/api/search?track_name=" + Uri.EscapeDataString(cleanTitle) + "&artist_name=" + Uri.EscapeDataString(cleanArtist);
+                    candidates.AddRange(FetchLrcCandidates(structuredUrl));
+                }
+
+                bool hasGoodDurationMatch = candidates.Any(c =>
+                    !string.IsNullOrWhiteSpace(c.syncedLyrics) &&
+                    (targetDur <= 10.0 || (c.duration > 10.0 && Math.Abs(c.duration - targetDur) <= 2.5)));
+
+                if (!hasGoodDurationMatch)
+                {
+                    string qUrl = "https://lrclib.net/api/search?q=" + Uri.EscapeDataString((cleanTitle + " " + cleanArtist).Trim());
+                    candidates.AddRange(FetchLrcCandidates(qUrl));
+                }
 
                 List<LyricLine> parsedSynced = new List<LyricLine>();
                 List<string> parsedPlain = new List<string>();
 
-                try
+                if (candidates.Count > 0)
                 {
-                    using (var req = new HttpRequestMessage(HttpMethod.Get, url))
-                    {
-                        req.Headers.TryAddWithoutValidation("User-Agent", "Glance/1.0");
-                        using (var resp = http.Send(req))
-                        {
-                            if (resp.IsSuccessStatusCode)
-                            {
-                                using (var sr = new StreamReader(resp.Content.ReadAsStream(), Encoding.UTF8))
-                                {
-                                    string body = sr.ReadToEnd();
-                                    var items = json.Deserialize<List<LrcSearchItem>>(body);
-                                    if (items != null && items.Count > 0)
-                                    {
-                                        var best = items.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x.syncedLyrics))
-                                                   ?? items[0];
+                    var best = candidates
+                        .OrderByDescending(x => ScoreLyricCandidate(x, title, cleanTitle, cleanArtist, targetDur))
+                        .FirstOrDefault();
 
-                                        if (!string.IsNullOrWhiteSpace(best.syncedLyrics))
-                                        {
-                                            string rawSynced = best.syncedLyrics;
-                                            foreach (string line in rawSynced.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
-                                            {
-                                                Match m = Regex.Match(line, @"^\[(\d+):(\d+(?:\.\d+)?)\]\s*(.*)$");
-                                                if (m.Success)
-                                                {
-                                                    double sec = int.Parse(m.Groups[1].Value) * 60.0 + double.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture);
-                                                    string txt = m.Groups[3].Value.Trim();
-                                                    if (!string.IsNullOrEmpty(txt))
-                                                    {
-                                                        parsedSynced.Add(new LyricLine { TimeSec = sec, Text = txt });
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        else if (!string.IsNullOrWhiteSpace(best.plainLyrics))
-                                        {
-                                            string rawPlain = best.plainLyrics;
-                                            parsedPlain.AddRange(rawPlain.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries));
-                                        }
+                    if (best != null)
+                    {
+                        if (!string.IsNullOrWhiteSpace(best.syncedLyrics))
+                        {
+                            string rawSynced = best.syncedLyrics;
+                            foreach (string line in rawSynced.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+                            {
+                                Match m = Regex.Match(line, @"^\[(\d+):(\d+(?:\.\d+)?)\]\s*(.*)$");
+                                if (m.Success)
+                                {
+                                    double sec = int.Parse(m.Groups[1].Value) * 60.0 + double.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture);
+                                    string txt = m.Groups[3].Value.Trim();
+                                    if (!string.IsNullOrEmpty(txt))
+                                    {
+                                        parsedSynced.Add(new LyricLine { TimeSec = sec, Text = txt });
                                     }
                                 }
                             }
                         }
+                        else if (!string.IsNullOrWhiteSpace(best.plainLyrics))
+                        {
+                            string rawPlain = best.plainLyrics;
+                            parsedPlain.AddRange(rawPlain.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries));
+                        }
                     }
                 }
-                catch { }
 
                 Dispatcher.Invoke(() =>
                 {
@@ -10654,14 +10749,18 @@ namespace Glance
                         }
                         if (tl != null)
                         {
-                            snap.Position = Math.Max(0, tl.Position.TotalSeconds);
+                            snap.RawPosition = Math.Max(0, tl.Position.TotalSeconds);
+                            snap.Position = snap.RawPosition;
                             snap.Duration = Math.Max(0, tl.EndTime.TotalSeconds);
                             if (snap.Status == "Playing" && tl.LastUpdatedTime.Year > 2000)
                             {
                                 double diff = (DateTimeOffset.UtcNow - tl.LastUpdatedTime).TotalSeconds;
-                                if (diff > 0 && diff < 300)
+                                if (diff >= 0 && diff < 300)
                                 {
-                                    snap.Position = Math.Min(snap.Duration, snap.Position + diff);
+                                    snap.HasValidLastUpdated = true;
+                                    snap.Position = snap.Duration > 0
+                                        ? Math.Min(snap.Duration, snap.RawPosition + diff)
+                                        : (snap.RawPosition + diff);
                                 }
                             }
                         }
@@ -10802,16 +10901,47 @@ namespace Glance
             double netUpBps)
         {
             string oldKey = currentTitle + "|" + currentArtist;
+            string newKey = snap.Title + "|" + snap.Artist;
+            bool wasPlaying = (currentStatus == "Playing");
+
             currentTitle = snap.Title;
             currentArtist = snap.Artist;
             currentStatus = snap.Status;
-            currentPos = snap.Position;
             currentDur = snap.Duration;
-            lastPosSync = DateTime.UtcNow;
 
-            if (!string.IsNullOrWhiteSpace(currentTitle) && (currentTitle + "|" + currentArtist) != oldKey)
+            if (newKey == oldKey && currentStatus == "Playing" && wasPlaying)
             {
-                FetchLyricsIfNeeded();
+                double localPredPos = currentPos + (DateTime.UtcNow - lastPosSync).TotalSeconds;
+                bool rawPosChanged = Math.Abs(snap.RawPosition - lastRawSmtcPos) > 0.05;
+                if (rawPosChanged || snap.Position > localPredPos + 0.15 || Math.Abs(snap.Position - localPredPos) > 3.0)
+                {
+                    currentPos = snap.Position;
+                    lastPosSync = DateTime.UtcNow;
+                }
+            }
+            else
+            {
+                currentPos = snap.Position;
+                lastPosSync = DateTime.UtcNow;
+            }
+            lastRawSmtcPos = snap.RawPosition;
+
+            if (!string.IsNullOrWhiteSpace(currentTitle))
+            {
+                if (newKey != oldKey)
+                {
+                    FetchLyricsIfNeeded();
+                }
+                else if (newKey == loadedLyricsKey && currentDur > 10.0 && Math.Abs(currentDur - loadedLyricsTrackDur) > 2.5)
+                {
+                    loadedLyricsKey = "";
+                    FetchLyricsIfNeeded();
+                }
+            }
+
+            if (isExpanded)
+            {
+                UpdateMediaTimelineUI();
             }
 
             if (snap.ThumbnailChanged)
