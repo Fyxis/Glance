@@ -63,7 +63,6 @@ namespace GlanceSetup
         private TextBox txtInstallDir;
         private CheckBox chkRunAtStartup;
         private CheckBox chkInstallSearch;
-        private CheckBox chkInstallDock;
         private CheckBox chkDesktopShortcut;
         private CheckBox chkStartMenuShortcut;
         private CheckBox chkLaunchAfterInstall;
@@ -77,7 +76,7 @@ namespace GlanceSetup
         {
             Title = "Glance — Setup Installer";
             Width = 520;
-            Height = 505;
+            Height = 480;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
             ResizeMode = ResizeMode.NoResize;
             WindowStyle = WindowStyle.None;
@@ -283,11 +282,6 @@ namespace GlanceSetup
                 true,
                 false
             );
-            chkInstallDock = CreateSetupCheckBox(
-                "Install macOS Dynamic Dock (Floating Taskbar with Magnification)",
-                true,
-                false
-            );
             chkDesktopShortcut = CreateSetupCheckBox(
                 "Create Desktop Shortcut (Glance)",
                 true,
@@ -306,7 +300,6 @@ namespace GlanceSetup
 
             optsStack.Children.Add(chkRunAtStartup);
             optsStack.Children.Add(chkInstallSearch);
-            optsStack.Children.Add(chkInstallDock);
             optsStack.Children.Add(chkDesktopShortcut);
             optsStack.Children.Add(chkStartMenuShortcut);
             optsStack.Children.Add(chkLaunchAfterInstall);
@@ -513,7 +506,6 @@ namespace GlanceSetup
                     Directory.CreateDirectory(dataDir);
                     string configPath = System.IO.Path.Combine(dataDir, "config.json");
                     bool searchChoice = (chkInstallSearch.IsChecked == true);
-                    bool dockChoice = (chkInstallDock.IsChecked == true);
 
                     Dictionary<string, object> cfgDict = null;
                     if (File.Exists(configPath))
@@ -530,8 +522,6 @@ namespace GlanceSetup
                     }
                     cfgDict["isSearchInstalled"] = searchChoice;
                     cfgDict["isSearchEnabled"] = searchChoice;
-                    cfgDict["isDockInstalled"] = dockChoice;
-                    cfgDict["isDockEnabled"] = dockChoice;
                     File.WriteAllText(configPath, JsonSerializer.Serialize(cfgDict), Encoding.UTF8);
                 }
                 catch { }
@@ -554,8 +544,7 @@ namespace GlanceSetup
                     "Glance was successfully installed!\n\n" +
                     "• Location: " + targetExe + "\n" +
                     "• Run at Windows Startup: " + (chkRunAtStartup.IsChecked == true ? "Enabled (Automatically starts on boot)" : "Disabled") + "\n" +
-                    "• Glance Search Component: " + (chkInstallSearch.IsChecked == true ? "Installed & Active" : "Not Installed (Can be installed anytime in Settings)") + "\n" +
-                    "• macOS Dynamic Dock: " + (chkInstallDock.IsChecked == true ? "Installed & Active" : "Not Installed (Can be installed anytime in Settings)") + "\n\n" +
+                    "• Glance Search Component: " + (chkInstallSearch.IsChecked == true ? "Installed & Active" : "Not Installed (Can be installed anytime in Settings)") + "\n\n" +
                     "You can customize options anytime via the ⚙️ icon or right-clicking the System Tray icon.",
                     "Installation Complete",
                     MessageBoxButton.OK,
