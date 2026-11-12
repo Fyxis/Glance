@@ -155,21 +155,69 @@ The script will build and publish:
 
 ---
 
-## 📂 Project Structure
+## 📂 Project Structure (Clean Architecture)
 
-```
+Glance is organized using **Clean Architecture** principles to separate domain models, application business logic, OS/hardware infrastructure, and WPF presentation views:
+
+```text
 Glance/
 ├── src/
-│   ├── GlanceApp.cs        # Complete Glance Application (Notch, Dock, Search, Customizer, Lyrics, Win32)
-│   ├── SetupInstaller.cs   # Standalone Setup Installer with ShellLink & Registry Startup
-│   └── app.ico             # Application Icon
-├── build.ps1               # Automated .NET 8 build script
-├── Glance.csproj           # Modern .NET 8 project file
-├── GlanceSetup.csproj      # Installer project file
-├── Glance.exe              # Precompiled portable executable (~38 MB self-contained)
-├── GlanceSetup.exe         # Precompiled standalone installer (~38 MB self-contained)
-├── .gitignore              # Git ignore rules
-└── README.md               # Complete documentation
+│   ├── Domain/                         # 1. Core Domain Layer (Zero external dependencies)
+│   │   └── Entities/
+│   │       ├── AppConfig.cs            # Application configuration & color/hotkey preferences
+│   │       ├── MediaModels.cs          # LyricLine, LrcSearchItem, MediaSnapshot
+│   │       ├── ProductivityModels.cs   # NoteItem, ClipItem, ShelfItem
+│   │       └── SystemModels.cs         # DriveStatInfo, AppSearchEntry
+│   │
+│   ├── Application/                    # 2. Application Layer (Business logic & services)
+│   │   └── Services/
+│   │       └── LyricsScoringService.cs # Track title/artist normalization, candidate scoring & LRC parser
+│   │
+│   ├── Infrastructure/                 # 3. Infrastructure Layer (Win32, Hardware, APIs & Persistence)
+│   │   ├── ExternalApis/
+│   │   │   └── LrcLibApiClient.cs      # LRCLIB REST API client for synchronized lyrics
+│   │   ├── Hardware/
+│   │   │   ├── AudioComInterfaces.cs   # CoreAudio COM interfaces (IAudioEndpointVolume, IAudioMeterInformation)
+│   │   │   ├── HardwareController.cs   # Volume, Mute, WMI Brightness, CPU, RAM, Disk & Wi-Fi telemetry
+│   │   │   └── NetworkSpeedMonitor.cs  # Live network interface download/upload throughput monitor
+│   │   ├── Persistence/
+│   │   │   ├── JsonHelper.cs           # JSON serialization helper
+│   │   │   └── StartupManager.cs       # Windows Registry CurrentVersion\Run startup manager
+│   │   └── Win32/
+│   │       ├── MemoryOptimizer.cs      # Native working-set memory trimmer (psapi.dll / kernel32.dll)
+│   │       └── NativeMethods.cs        # Win32 P/Invoke declarations (user32, dwmapi, gdi32, wlanapi)
+│   │
+│   ├── Presentation/                   # 4. Presentation Layer (WPF Windows, HUD & Carousel Slides)
+│   │   ├── Notch/
+│   │   │   ├── MainWindow.cs               # Core Dynamic Island window, state & lifecycle
+│   │   │   ├── MainWindow.Collapsed.cs     # Collapsed ambient pill UI (Battery, Clock, Media/Net)
+│   │   │   ├── MainWindow.Expanded.cs      # Expanded HUD shell, header tabs & slide carousel
+│   │   │   ├── MainWindow.Telemetry.cs     # Media GSMTC polling, waveform & hardware timers
+│   │   │   ├── MainWindow.Persistence.cs   # Config/notes/clipboard/shelf load & save orchestration
+│   │   │   └── Slides/
+│   │   │       ├── MainWindow.SlideMedia.cs     # Slide 0: Media Player, Calendar & Synced Lyrics
+│   │   │       ├── MainWindow.SlideSystem.cs    # Slide 1: CPU, RAM, Battery & Multi-Drive Storage
+│   │   │       ├── MainWindow.SlideControl.cs   # Slide 2: Volume, Brightness & Wi-Fi Control Center
+│   │   │       ├── MainWindow.SlideClipboard.cs # Slide 3: Clipboard History Manager
+│   │   │       ├── MainWindow.SlideNotes.cs     # Slide 4: Quick Scratchpad Notes
+│   │   │       └── MainWindow.SlideShelf.cs     # Slide 5: Drag-and-Drop File Staging Shelf
+│   │   ├── Search/
+│   │   │   └── SpotlightWindow.cs      # Glance Search (macOS Spotlight-style app launcher)
+│   │   └── Settings/
+│   │       └── SettingsWindow.cs       # Multi-tab Settings & Color/Hotkey Customizer dialog
+│   │
+│   ├── Installer/                      # Standalone Setup Installer project files
+│   │   └── SetupInstaller.cs           # Setup GUI, ShellLink shortcut creator & Uninstaller
+│   │
+│   ├── Program.cs                      # Application entry point & single-instance guard
+│   └── app.ico                         # Application icon
+│
+├── build.ps1                           # Automated .NET 8 build & publish script
+├── Glance.csproj                       # Main Glance .NET 8 project file
+├── GlanceSetup.csproj                  # Standalone Installer project file
+├── Glance.exe                          # Precompiled portable executable
+├── GlanceSetup.exe                     # Precompiled standalone installer
+└── README.md                           # Documentation
 ```
 
 ---

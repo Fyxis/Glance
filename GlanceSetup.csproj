@@ -10,10 +10,11 @@
     <Nullable>disable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="src\GlanceApp.cs" />
+    <Compile Include="src\Installer\**\*.cs" />
   </ItemGroup>
 
   <ItemGroup>
