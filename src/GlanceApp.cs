@@ -2843,52 +2843,60 @@ namespace Glance
 
         private void OnSaveClicked()
         {
-            StartupManager.SetStartup(chkStartup.IsChecked == true);
-            string selectedMode = "screen1";
-            if (rbScreen2.IsChecked == true) selectedMode = "screen2";
-            else if (rbScreenBoth.IsChecked == true) selectedMode = "both";
-            MainWindow.ApplyDisplayMode(selectedMode);
-
-            if (parentIsland != null)
+            try
             {
-                parentIsland.SetPinned(chkPin.IsChecked == true);
+                StartupManager.SetStartup(chkStartup.IsChecked == true);
+                string selectedMode = "screen1";
+                if (rbScreen2.IsChecked == true) selectedMode = "screen2";
+                else if (rbScreenBoth.IsChecked == true) selectedMode = "both";
 
-                // Colors
-                parentIsland.ColorAccent = tempColorAccent;
-                parentIsland.ColorBattery = tempColorBattery;
-                parentIsland.ColorCpu = tempColorCpu;
-                parentIsland.ColorRam = tempColorRam;
-                parentIsland.ColorDisk = tempColorDisk;
-                parentIsland.ColorSound = tempColorSound;
-                parentIsland.ColorBrightness = tempColorBrightness;
-                parentIsland.ColorWifi = tempColorWifi;
-
-                // Slides (Ensure at least 1 is active)
-                bool m = chkSlideMedia.IsChecked == true;
-                bool s = chkSlideSystem.IsChecked == true;
-                bool c = chkSlideControl.IsChecked == true;
-                bool cl = chkSlideClipboard.IsChecked == true;
-                bool n = chkSlideNotes.IsChecked == true;
-                bool sh = chkSlideShelf.IsChecked == true;
-
-                if (!m && !s && !c && !cl && !n && !sh)
+                if (parentIsland != null)
                 {
-                    m = true;
+                    // Colors
+                    parentIsland.ColorAccent = tempColorAccent;
+                    parentIsland.ColorBattery = tempColorBattery;
+                    parentIsland.ColorCpu = tempColorCpu;
+                    parentIsland.ColorRam = tempColorRam;
+                    parentIsland.ColorDisk = tempColorDisk;
+                    parentIsland.ColorSound = tempColorSound;
+                    parentIsland.ColorBrightness = tempColorBrightness;
+                    parentIsland.ColorWifi = tempColorWifi;
+
+                    // Slides (Ensure at least 1 is active)
+                    bool m = chkSlideMedia.IsChecked == true;
+                    bool s = chkSlideSystem.IsChecked == true;
+                    bool c = chkSlideControl.IsChecked == true;
+                    bool cl = chkSlideClipboard.IsChecked == true;
+                    bool n = chkSlideNotes.IsChecked == true;
+                    bool sh = chkSlideShelf.IsChecked == true;
+
+                    if (!m && !s && !c && !cl && !n && !sh)
+                    {
+                        m = true;
+                    }
+
+                    parentIsland.ShowSlideMedia = m;
+                    parentIsland.ShowSlideSystem = s;
+                    parentIsland.ShowSlideControl = c;
+                    parentIsland.ShowSlideClipboard = cl;
+                    parentIsland.ShowSlideNotes = n;
+                    parentIsland.ShowSlideShelf = sh;
+
+                    parentIsland.SetPinned(chkPin.IsChecked == true);
+                    parentIsland.ApplySearchConfig(tempIsSearchInstalled, tempIsSearchEnabled);
+                    parentIsland.UpdateGlobalHotkey(tempHotkeyModifiers, tempHotkeyKey, tempHotkeyDisplay);
+                    parentIsland.ApplyCustomColors();
+                    parentIsland.ApplySlideVisibilityConfig();
                 }
 
-                parentIsland.ShowSlideMedia = m;
-                parentIsland.ShowSlideSystem = s;
-                parentIsland.ShowSlideControl = c;
-                parentIsland.ShowSlideClipboard = cl;
-                parentIsland.ShowSlideNotes = n;
-                parentIsland.ShowSlideShelf = sh;
+                MainWindow.ApplyDisplayMode(selectedMode);
 
-                parentIsland.ApplySearchConfig(tempIsSearchInstalled, tempIsSearchEnabled);
-                parentIsland.UpdateGlobalHotkey(tempHotkeyModifiers, tempHotkeyKey, tempHotkeyDisplay);
-                parentIsland.ApplyCustomColors();
-                parentIsland.ApplySlideVisibilityConfig();
-                parentIsland.SaveAppConfig();
+                if (parentIsland != null)
+                {
+                    parentIsland.SaveAppConfig();
+                }
             }
+            catch { }
 
             Close();
         }
@@ -3704,7 +3712,7 @@ namespace Glance
                 UpdateHotkeyTooltips();
             }
 
-            if (CompanionInstance != null)
+            if (!IsCompanionWindow && CompanionInstance != null)
             {
                 CompanionInstance.IsSearchInstalled = isInstalled;
                 CompanionInstance.IsSearchEnabled = isEnabled;
@@ -3765,7 +3773,7 @@ namespace Glance
                 UpdateHotkeyTooltips();
             }
 
-            if (CompanionInstance != null)
+            if (!IsCompanionWindow && CompanionInstance != null)
             {
                 CompanionInstance.HotkeyModifiers = HotkeyModifiers;
                 CompanionInstance.HotkeyKey = HotkeyKey;
@@ -7977,10 +7985,23 @@ namespace Glance
             trayItemBoth.Checked = (DisplayMode == "both");
         }
 
+        private static SettingsWindow activeSettingsWin;
+
         public void OpenSettingsDialog()
         {
-            SettingsWindow sw = new SettingsWindow(PrimaryInstance ?? this);
-            sw.ShowDialog();
+            try
+            {
+                if (activeSettingsWin != null && activeSettingsWin.IsLoaded)
+                {
+                    activeSettingsWin.Activate();
+                    return;
+                }
+                activeSettingsWin = new SettingsWindow(PrimaryInstance ?? this);
+                activeSettingsWin.Closed += (s, e) => activeSettingsWin = null;
+                activeSettingsWin.Show();
+                activeSettingsWin.Activate();
+            }
+            catch { }
         }
     }
 
@@ -7993,7 +8014,7 @@ namespace Glance
             {
                 AppDomain.CurrentDomain.UnhandledException += (s, e) =>
                 {
-                    File.WriteAllText("d:\\Coding-an\\windows-notch\\error.log", e.ExceptionObject.ToString());
+                    try { File.WriteAllText("d:\\Coding-an\\windows-notch\\error.log", e.ExceptionObject.ToString()); } catch { }
                 };
 
                 int currentPid = Process.GetCurrentProcess().Id;
@@ -8011,7 +8032,8 @@ namespace Glance
                 app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
                 app.DispatcherUnhandledException += (s, e) =>
                 {
-                    File.WriteAllText("d:\\Coding-an\\windows-notch\\error.log", e.Exception.ToString());
+                    e.Handled = true;
+                    try { File.WriteAllText("d:\\Coding-an\\windows-notch\\error.log", e.Exception.ToString()); } catch { }
                 };
 
                 MainWindow mainWin = new MainWindow();
