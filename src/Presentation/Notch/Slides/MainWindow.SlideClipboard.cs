@@ -88,6 +88,14 @@ namespace Glance
                         clipList = clipList.OrderByDescending(c => c.pinned).Take(25).ToList();
                         SaveClipData();
                         RenderClipboardList();
+
+                        if (telemetryInitialized)
+                        {
+                            string preview = txt.Replace("\r", " ").Replace("\n", " ").Trim();
+                            if (preview.Length > 14) preview = preview.Substring(0, 14) + "…";
+                            Color acc = ColorFromHex(ColorAccent, Color.FromRgb(28, 231, 85));
+                            ShowLiveActivityToast("📋", "Copied", preview, 100, false, acc, 1500);
+                        }
                     }
                 }
             }

@@ -27,6 +27,11 @@ Unlike heavy modern utilities wrapped in Electron or Chromium that devour hundre
 * **Fluid Expansion**: Expands into an interactive 6-slide control hub on hover or click with custom cubic-bezier spring easing.
 * **Translucent Frosted Glass**: Modern acrylic glass styling with customizable opacity slider in Settings (`⚙️`).
 * **Always-On Display (AOD) Sleep Mode**: When your mouse remains idle for 5 seconds (customizable `2s – 30s`), the notch smoothly shrinks into a minimalist, dimmed (`~42%` opacity) capsule showing only the centered clock (`HH:mm`). Moving the mouse wakes the notch up instantaneously.
+* **Live Activities / Contextual Pop-Up Toasts**: Automatically expands the collapsed notch pill with animated progress bars and status badges for real-time events:
+  - **Volume & Mute HUD** (`🔊 Volume • 75%` / `🔇 Audio Muted`)
+  - **Display Brightness HUD** (`☀️ Brightness • 80%`)
+  - **Power & Battery Alerts** (`⚡ Charging`, `🔋 On Battery`, `🪫 Low Battery ≤ 20%`)
+  - **Clipboard & Action Feedback** (`📋 Copied`, `🧮 Copied Result`, `🗑️ Recycle Bin Emptied`)
 * **Pin Mode**: Lock Glance in expanded view or let it auto-collapse gracefully when your mouse leaves.
 
 ### 🎵 2. Interactive Media Player & Synced Lyrics
@@ -39,11 +44,13 @@ Unlike heavy modern utilities wrapped in Electron or Chromium that devour hundre
 * **Dynamic Waveform Animation**: Five responsive audio waveform bars that move dynamically based on live system audio peak levels (`IAudioMeterInformation`).
 * **Adaptive Color Palette**: Automatically extracts the dominant accent color from active album art to dynamically tint controls and waveforms.
 
-### 🔍 3. Glance Search (`Ctrl + Shift + P`)
-* **macOS Spotlight-style Launcher**: Centered keyboard-first search bar that appears instantly with `Ctrl + Shift + P`.
-* **Frosted Glass Blur**: Blurs your desktop background into a silky-smooth Gaussian glass backdrop.
-* **Instant Fuzzy Search**: Rapidly finds applications across the Start Menu, Desktop, and Windows Registry App Paths.
-* **Keyboard Navigation**: Navigate matches with `↑` / `↓` and press `Enter` to launch, or `ESC` to dismiss.
+### 🔍 3. Glance Search (`Ctrl + Shift + P`) — Raycast-Style Super Launcher
+* **macOS Spotlight & Raycast-style Launcher**: Centered keyboard-first search bar that appears instantly with `Ctrl + Shift + P` over a Gaussian frosted-glass backdrop.
+* **Instant Fuzzy App Search**: Rapidly finds applications across the Start Menu, Desktop, and Windows Registry App Paths.
+* **Instant Math Calculator (`🧮`)**: Type expressions like `250 * 14`, `150000 - 20%`, `2^10`, or `sqrt(144)` to evaluate in real time—press `Enter` to copy the result to the Clipboard.
+* **Quick System Commands (`⚡`)**: Run system actions directly from search (`Lock Screen`, `Sleep Computer`, `Empty Recycle Bin`, `Mute / Unmute Audio`, `Restart Windows Explorer`, `Open Task Manager`, `Glance Settings`, `Toggle Sleep Mode`).
+* **Web & AI Search Shortcuts (`🌐`)**: Use prefixes (`g <query>` for Google, `yt <query>` for YouTube, `gh <query>` for GitHub, `ai <query>` for ChatGPT) or select the automatic Google/YouTube fallback options for any query.
+* **Keyboard Navigation**: Navigate matches with `↑` / `↓` and press `Enter` to execute, or `ESC` to dismiss.
 
 ### 🎛️ 4. Control Center
 * **Wi-Fi Telemetry**: Connection status, active SSID, and real-time signal strength via native `wlanapi.dll`.
@@ -184,7 +191,8 @@ Glance/
 │   │
 │   ├── Application/                    # 2. Application Layer (Business logic & services)
 │   │   └── Services/
-│   │       └── LyricsScoringService.cs # Track title/artist normalization, candidate scoring & LRC parser
+│   │       ├── LyricsScoringService.cs # Track title/artist normalization, candidate scoring & LRC parser
+│   │       └── SearchQueryService.cs   # Instant calculator, system commands & web search query engine
 │   │
 │   ├── Infrastructure/                 # 3. Infrastructure Layer (Win32, Hardware, APIs & Persistence)
 │   │   ├── ExternalApis/

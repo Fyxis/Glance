@@ -1,7 +1,7 @@
 ﻿{
-    "version":  "1.1.1",
-    "buildNumber":  20261113043541,
-    "publishedAt":  "2026-11-13 11:35:41",
+    "version":  "1.2.0",
+    "buildNumber":  20261113050653,
+    "publishedAt":  "2026-11-13 12:06:53",
     "downloadUrl":  "https://raw.githubusercontent.com/Fyxis/Glance/main/Glance.exe",
-    "releaseNotes":  "Penambahan fitur Mode Sleep (Always-On Display) saat mouse tidak bergerak selama 5 detik."
+    "releaseNotes":  "Penambahan fitur Live Activities (Volume, Brightness, Charger, Clipboard Toast) dan Upgrade Glance Search (Kalkulator Instan, System Commands, \u0026 Web Search)."
 }

@@ -296,9 +296,9 @@ namespace Glance
             Grid textHost = new Grid { VerticalAlignment = VerticalAlignment.Center };
             placeholderText = new TextBlock
             {
-                Text = "Glance Search — Type an app name (e.g. Chrome, Spotify)...",
+                Text = "Search apps, calculate (250*14), commands, or web (g / yt / ai)...",
                 Foreground = new SolidColorBrush(Color.FromRgb(125, 125, 138)),
-                FontSize = 17,
+                FontSize = 16,
                 FontWeight = FontWeights.Medium,
                 VerticalAlignment = VerticalAlignment.Center,
                 IsHitTestVisible = false
@@ -462,7 +462,8 @@ namespace Glance
 
         private void OnSearchInputChanged(object sender, TextChangedEventArgs e)
         {
-            string query = (searchInput.Text ?? "").Trim().ToLowerInvariant();
+            string rawInput = (searchInput.Text ?? "").Trim();
+            string query = rawInput.ToLowerInvariant();
             placeholderText.Visibility = string.IsNullOrEmpty(searchInput.Text) ? Visibility.Visible : Visibility.Collapsed;
 
             if (string.IsNullOrEmpty(query))
@@ -476,34 +477,63 @@ namespace Glance
 
             EnsureAppsIndexed();
 
-            var scored = new List<Tuple<int, AppSearchEntry>>();
+            var combined = new List<AppSearchEntry>();
+
+            // 1. Instant Math Calculator Result (Top Priority if valid math expression)
+            if (SearchQueryService.TryEvaluateCalculator(rawInput, out AppSearchEntry calcEntry))
+            {
+                combined.Add(calcEntry);
+            }
+
+            // 2. Check Web Search Prefixes (e.g. "g ", "yt ", "gh ", "ai ")
+            var webEntries = SearchQueryService.GetWebSearchEntries(rawInput, out bool isExplicitWebPrefix);
+            if (isExplicitWebPrefix)
+            {
+                combined.AddRange(webEntries);
+            }
+
+            // 3. Matching Installed / System Applications
+            var scoredApps = new List<Tuple<int, AppSearchEntry>>();
             if (cachedApps != null)
             {
                 foreach (var app in cachedApps)
                 {
                     if (app.LowerName.StartsWith(query))
                     {
-                        scored.Add(Tuple.Create(1, app));
+                        scoredApps.Add(Tuple.Create(1, app));
                     }
                     else if (app.Words != null && app.Words.Any(w => w.StartsWith(query)))
                     {
-                        scored.Add(Tuple.Create(2, app));
+                        scoredApps.Add(Tuple.Create(2, app));
                     }
                     else if (app.LowerName.Contains(query))
                     {
-                        scored.Add(Tuple.Create(3, app));
+                        scoredApps.Add(Tuple.Create(3, app));
                     }
                 }
             }
 
-            currentMatches = scored
+            var topApps = scoredApps
                 .OrderBy(t => t.Item1)
                 .ThenBy(t => t.Item2.Name.Length)
                 .ThenBy(t => t.Item2.Name)
                 .Select(t => t.Item2)
-                .Take(7)
+                .Take(5)
                 .ToList();
 
+            combined.AddRange(topApps);
+
+            // 4. Matching Quick System Commands (Lock, Sleep, Empty Recycle Bin, Mute, Settings, etc.)
+            var cmdMatches = SearchQueryService.GetMatchingSystemCommands(query);
+            combined.AddRange(cmdMatches);
+
+            // 5. Web Search Fallback (Google & YouTube) if not already added via prefix
+            if (!isExplicitWebPrefix)
+            {
+                combined.AddRange(webEntries);
+            }
+
+            currentMatches = combined.Take(8).ToList();
             RenderSearchResults();
         }
 
@@ -515,18 +545,6 @@ namespace Glance
 
             resultsDivider.Visibility = Visibility.Visible;
             resultsStack.Visibility = Visibility.Visible;
-
-            if (currentMatches.Count == 0)
-            {
-                resultsStack.Children.Add(new TextBlock
-                {
-                    Text = "Tidak ditemukan aplikasi dengan nama tersebut.",
-                    Foreground = new SolidColorBrush(Color.FromRgb(140, 140, 152)),
-                    FontSize = 13,
-                    Margin = new Thickness(12, 10, 12, 10)
-                });
-                return;
-            }
 
             for (int i = 0; i < currentMatches.Count; i++)
             {
@@ -546,54 +564,82 @@ namespace Glance
                 Grid g = new Grid();
                 g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(36) });
                 g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(75) });
+                g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(82) });
 
-                ImageSource iconSrc = GetOrLoadIcon(app);
-                if (iconSrc != null)
+                Color badgeCol = MainWindow.ColorFromHex(app.BadgeColorHex, Color.FromRgb(28, 231, 85));
+
+                if (app.EntryKind == "app")
                 {
-                    Image img = new Image
+                    ImageSource iconSrc = GetOrLoadIcon(app);
+                    if (iconSrc != null)
                     {
-                        Source = iconSrc,
-                        Width = 26,
-                        Height = 26,
-                        HorizontalAlignment = HorizontalAlignment.Left,
-                        VerticalAlignment = VerticalAlignment.Center
-                    };
-                    RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.HighQuality);
-                    Grid.SetColumn(img, 0);
-                    g.Children.Add(img);
+                        Image img = new Image
+                        {
+                            Source = iconSrc,
+                            Width = 26,
+                            Height = 26,
+                            HorizontalAlignment = HorizontalAlignment.Left,
+                            VerticalAlignment = VerticalAlignment.Center
+                        };
+                        RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.HighQuality);
+                        Grid.SetColumn(img, 0);
+                        g.Children.Add(img);
+                    }
+                    else
+                    {
+                        Border fallbackIcon = new Border
+                        {
+                            Width = 26,
+                            Height = 26,
+                            CornerRadius = new CornerRadius(6),
+                            Background = new SolidColorBrush(Color.FromArgb(60, 28, 231, 85)),
+                            HorizontalAlignment = HorizontalAlignment.Left,
+                            VerticalAlignment = VerticalAlignment.Center
+                        };
+                        fallbackIcon.Child = new TextBlock
+                        {
+                            Text = app.Name.Substring(0, 1).ToUpperInvariant(),
+                            Foreground = new SolidColorBrush(Color.FromRgb(28, 231, 85)),
+                            FontWeight = FontWeights.Bold,
+                            FontSize = 12,
+                            HorizontalAlignment = HorizontalAlignment.Center,
+                            VerticalAlignment = VerticalAlignment.Center
+                        };
+                        Grid.SetColumn(fallbackIcon, 0);
+                        g.Children.Add(fallbackIcon);
+                    }
                 }
                 else
                 {
-                    Border fallbackIcon = new Border
+                    Border emojiBadge = new Border
                     {
-                        Width = 26,
-                        Height = 26,
-                        CornerRadius = new CornerRadius(6),
-                        Background = new SolidColorBrush(Color.FromArgb(60, 28, 231, 85)),
+                        Width = 27,
+                        Height = 27,
+                        CornerRadius = new CornerRadius(7),
+                        Background = new SolidColorBrush(Color.FromArgb(48, badgeCol.R, badgeCol.G, badgeCol.B)),
+                        BorderBrush = new SolidColorBrush(Color.FromArgb(95, badgeCol.R, badgeCol.G, badgeCol.B)),
+                        BorderThickness = new Thickness(1),
                         HorizontalAlignment = HorizontalAlignment.Left,
                         VerticalAlignment = VerticalAlignment.Center
                     };
-                    fallbackIcon.Child = new TextBlock
+                    emojiBadge.Child = new TextBlock
                     {
-                        Text = app.Name.Substring(0, 1).ToUpperInvariant(),
-                        Foreground = new SolidColorBrush(Color.FromRgb(28, 231, 85)),
-                        FontWeight = FontWeights.Bold,
-                        FontSize = 12,
+                        Text = !string.IsNullOrEmpty(app.EmojiIcon) ? app.EmojiIcon : "✨",
+                        FontSize = 13.5,
                         HorizontalAlignment = HorizontalAlignment.Center,
                         VerticalAlignment = VerticalAlignment.Center
                     };
-                    Grid.SetColumn(fallbackIcon, 0);
-                    g.Children.Add(fallbackIcon);
+                    Grid.SetColumn(emojiBadge, 0);
+                    g.Children.Add(emojiBadge);
                 }
 
                 StackPanel textCol = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
                 textCol.Children.Add(new TextBlock
                 {
                     Text = app.Name,
-                    Foreground = Brushes.White,
-                    FontSize = 13.5,
-                    FontWeight = FontWeights.SemiBold,
+                    Foreground = app.EntryKind == "calc" ? new SolidColorBrush(badgeCol) : Brushes.White,
+                    FontSize = app.EntryKind == "calc" ? 15 : 13.5,
+                    FontWeight = app.EntryKind == "calc" ? FontWeights.Bold : FontWeights.SemiBold,
                     TextTrimming = TextTrimming.CharacterEllipsis
                 });
                 textCol.Children.Add(new TextBlock
@@ -608,8 +654,8 @@ namespace Glance
 
                 TextBlock enterHint = new TextBlock
                 {
-                    Text = "Open ↵",
-                    Foreground = new SolidColorBrush(Color.FromRgb(28, 231, 85)),
+                    Text = !string.IsNullOrEmpty(app.ActionHint) ? app.ActionHint : "Open ↵",
+                    Foreground = new SolidColorBrush(badgeCol),
                     FontSize = 11.5,
                     FontWeight = FontWeights.Bold,
                     HorizontalAlignment = HorizontalAlignment.Right,
@@ -629,7 +675,7 @@ namespace Glance
                 row.MouseLeftButtonUp += (s, e) =>
                 {
                     e.Handled = true;
-                    LaunchApp(app);
+                    ExecuteEntry(app);
                 };
 
                 resultRowBorders.Add(row);
@@ -695,23 +741,128 @@ namespace Glance
                 if (currentMatches.Count > 0 && selectedIndex >= 0 && selectedIndex < currentMatches.Count)
                 {
                     e.Handled = true;
-                    LaunchApp(currentMatches[selectedIndex]);
+                    ExecuteEntry(currentMatches[selectedIndex]);
                 }
             }
         }
 
-        private void LaunchApp(AppSearchEntry app)
+        private void ExecuteEntry(AppSearchEntry entry)
         {
+            if (entry == null) return;
             HideSpotlight();
+
             try
             {
-                Process.Start(new ProcessStartInfo
+                if (entry.EntryKind == "calc")
                 {
-                    FileName = app.LaunchPath,
-                    UseShellExecute = true
-                });
+                    if (!string.IsNullOrEmpty(entry.CopyText))
+                    {
+                        Clipboard.SetText(entry.CopyText);
+                        MainWindow.PrimaryInstance?.ShowLiveActivityToast(
+                            "🧮",
+                            "Copied Result",
+                            entry.CopyText,
+                            100,
+                            false,
+                            Color.FromRgb(56, 189, 248),
+                            1800
+                        );
+                    }
+                    return;
+                }
+
+                if (entry.EntryKind == "command")
+                {
+                    ExecuteSystemCommand(entry.CommandId);
+                    return;
+                }
+
+                if (!string.IsNullOrEmpty(entry.LaunchPath))
+                {
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = entry.LaunchPath,
+                        UseShellExecute = true
+                    });
+                }
             }
             catch { }
+        }
+
+        private void ExecuteSystemCommand(string commandId)
+        {
+            var main = MainWindow.PrimaryInstance;
+            switch (commandId)
+            {
+                case "cmd_settings":
+                    main?.OpenSettingsDialog();
+                    break;
+                case "cmd_update":
+                    main?.CheckForUpdatesInteractive(true);
+                    break;
+                case "cmd_mute":
+                    HardwareController.ToggleAudioMute();
+                    break;
+                case "cmd_pin":
+                    if (main != null)
+                    {
+                        bool nextPin = !main.IsPinned;
+                        main.SetPinned(nextPin);
+                        main.ShowLiveActivityToast("📌", "Notch Pin", nextPin ? "Pinned" : "Unpinned", 100, false, Color.FromRgb(245, 158, 11), 1600);
+                    }
+                    break;
+                case "cmd_aod":
+                    if (main != null)
+                    {
+                        bool nextAod = !main.EnableSleepMode;
+                        main.ApplySleepConfig(nextAod, main.SleepTimeoutSeconds);
+                        main.SaveAppConfig();
+                        main.ShowLiveActivityToast("🌙", "Sleep Mode (AOD)", nextAod ? "Enabled" : "Disabled", 100, false, Color.FromRgb(168, 85, 247), 1800);
+                    }
+                    break;
+                case "cmd_lock":
+                    NativeMethods.LockWorkStation();
+                    break;
+                case "cmd_sleep_pc":
+                    NativeMethods.SetSuspendState(false, false, false);
+                    break;
+                case "cmd_recycle":
+                    Task.Run(() =>
+                    {
+                        try
+                        {
+                            NativeMethods.SHEmptyRecycleBin(
+                                IntPtr.Zero,
+                                null,
+                                NativeMethods.SHERB_NOCONFIRMATION | NativeMethods.SHERB_NOPROGRESSUI | NativeMethods.SHERB_NOSOUND
+                            );
+                        }
+                        catch { }
+                    });
+                    main?.ShowLiveActivityToast("🗑️", "Recycle Bin", "Emptied", 100, false, Color.FromRgb(239, 68, 68), 2000);
+                    break;
+                case "cmd_taskmgr":
+                    Process.Start(new ProcessStartInfo { FileName = "taskmgr.exe", UseShellExecute = true });
+                    break;
+                case "cmd_winsettings":
+                    Process.Start(new ProcessStartInfo { FileName = "ms-settings:", UseShellExecute = true });
+                    break;
+                case "cmd_explorer_restart":
+                    Task.Run(() =>
+                    {
+                        try
+                        {
+                            foreach (var p in Process.GetProcessesByName("explorer"))
+                            {
+                                try { p.Kill(); p.WaitForExit(1500); } catch { }
+                            }
+                            Process.Start(new ProcessStartInfo { FileName = "explorer.exe", UseShellExecute = true });
+                        }
+                        catch { }
+                    });
+                    main?.ShowLiveActivityToast("🔃", "Explorer", "Restarted", 100, false, Color.FromRgb(249, 115, 22), 2000);
+                    break;
+            }
         }
     }
 }

@@ -163,6 +163,11 @@ namespace Glance
                     double totalRamGB = mem.ullTotalPhys / (1024.0 * 1024 * 1024);
                     double usedRamGB = (mem.ullTotalPhys - mem.ullAvailPhys) / (1024.0 * 1024 * 1024);
 
+                    if (loopCounter % 2 == 0 && !isDraggingBright)
+                    {
+                        cachedBrightness = HardwareController.GetScreenBrightness();
+                    }
+
                     if (isExpanded)
                     {
                         if (loopCounter % 15 == 0 || cachedDrivesList == null || cachedDrivesList.Count == 0)
@@ -172,10 +177,6 @@ namespace Glance
 
                         if (loopCounter % 4 == 0)
                         {
-                            if (!isDraggingBright)
-                            {
-                                cachedBrightness = HardwareController.GetScreenBrightness();
-                            }
                             HardwareController.GetWifiStatus(out cachedWifiConn, out cachedWifiSsid, out cachedWifiSig);
                         }
                     }
@@ -330,6 +331,61 @@ namespace Glance
             }
 
             UpdateCollapsedMusicMode();
+
+            // Live Activity Toast Triggers (Volume, Brightness, Charger & Low Battery)
+            if (!IsCompanionWindow)
+            {
+                if (!telemetryInitialized)
+                {
+                    telemetryInitialized = true;
+                    lastToastVolPct = volPct;
+                    lastToastMuted = isMuted;
+                    lastToastBrightPct = brightnessPct;
+                    lastChargingState = isCharging;
+                }
+                else
+                {
+                    if (volPct != lastToastVolPct || isMuted != lastToastMuted)
+                    {
+                        lastToastVolPct = volPct;
+                        lastToastMuted = isMuted;
+                        string vIcon = (isMuted || volPct == 0) ? "🔇" : (volPct < 50 ? "🔉" : "🔊");
+                        string vTitle = isMuted ? "Audio Muted" : "Volume";
+                        string vVal = isMuted ? "Mute" : (volPct + "%");
+                        Color vCol = ColorFromHex(ColorSound, Color.FromRgb(56, 189, 248));
+                        ShowLiveActivityToast(vIcon, vTitle, vVal, isMuted ? 0 : volPct, true, vCol, 1750);
+                    }
+                    else if (brightnessPct != lastToastBrightPct)
+                    {
+                        lastToastBrightPct = brightnessPct;
+                        Color bCol = ColorFromHex(ColorBrightness, Color.FromRgb(251, 191, 36));
+                        ShowLiveActivityToast("☀️", "Brightness", brightnessPct + "%", brightnessPct, true, bCol, 1750);
+                    }
+                    else if (lastChargingState.HasValue && isCharging != lastChargingState.Value)
+                    {
+                        lastChargingState = isCharging;
+                        if (isCharging)
+                        {
+                            Color cCol = ColorFromHex(ColorBattery, Color.FromRgb(28, 231, 85));
+                            ShowLiveActivityToast("⚡", "Charging", batPct + "%", batPct, true, cCol, 2600);
+                        }
+                        else
+                        {
+                            ShowLiveActivityToast("🔋", "On Battery", batPct + "%", batPct, true, Color.FromRgb(251, 191, 36), 2400);
+                        }
+                    }
+
+                    if (isCharging || batPct > 22)
+                    {
+                        lowBatteryWarned = false;
+                    }
+                    else if (!isCharging && batPct <= 20 && !lowBatteryWarned)
+                    {
+                        lowBatteryWarned = true;
+                        ShowLiveActivityToast("🪫", "Low Battery", batPct + "%", batPct, true, Color.FromRgb(248, 113, 113), 3200);
+                    }
+                }
+            }
 
             if (batPct != lastBatPct)
             {

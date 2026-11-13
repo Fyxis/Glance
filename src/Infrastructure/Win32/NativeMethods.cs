@@ -205,5 +205,18 @@ namespace Glance
 
         public const int GWL_STYLE = -16;
         public const uint WS_CAPTION = 0x00C00000;
+
+        [DllImport("user32.dll")]
+        public static extern bool LockWorkStation();
+
+        [DllImport("powrprof.dll", SetLastError = true)]
+        public static extern bool SetSuspendState(bool hibernate, bool forceCritical, bool disableWakeEvent);
+
+        [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+        public static extern uint SHEmptyRecycleBin(IntPtr hwnd, string pszRootPath, uint dwFlags);
+
+        public const uint SHERB_NOCONFIRMATION = 0x00000001;
+        public const uint SHERB_NOPROGRESSUI = 0x00000002;
+        public const uint SHERB_NOSOUND = 0x00000004;
     }
 }

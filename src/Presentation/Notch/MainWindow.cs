@@ -96,6 +96,24 @@ namespace Glance
         private NativeMethods.POINT lastMousePt;
         private DateTime lastMouseMoveUtc = DateTime.UtcNow;
 
+        // Live Activities / Contextual Toast Overlay on Collapsed Notch
+        private const double ToastCollapsedWidth = 258;
+        private bool isToastActive = false;
+        private Grid collapsedToastLayout;
+        private Border toastIconBadge;
+        private TextBlock toastIconText;
+        private TextBlock toastTitleText;
+        private Border toastBarTrack;
+        private Border toastBarFill;
+        private TextBlock toastValueText;
+        private DispatcherTimer toastDismissTimer;
+        private bool telemetryInitialized = false;
+        private int lastToastVolPct = -1;
+        private bool lastToastMuted = false;
+        private int lastToastBrightPct = -1;
+        private bool? lastChargingState = null;
+        private bool lowBatteryWarned = false;
+
         private SolidColorBrush notchBgBrush;
         private static SpotlightWindow spotlightWin;
         private static SettingsWindow activeSettingsWin;

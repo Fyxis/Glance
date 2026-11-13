@@ -339,6 +339,10 @@ namespace Glance
             {
                 WakeFromSleepMode(false);
             }
+            if (isToastActive)
+            {
+                DismissLiveActivityToast(false);
+            }
             isExpanded = true;
             lastMouseMoveUtc = DateTime.UtcNow;
 

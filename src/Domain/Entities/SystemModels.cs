@@ -15,7 +15,7 @@ namespace Glance
     }
 
     /// <summary>
-    /// Entri aplikasi terindeks untuk pencarian instan pada Glance Search (Spotlight).
+    /// Entri hasil pencarian multifungsi pada Glance Search (Aplikasi, Kalkulator, Perintah Sistem, & Web Search).
     /// </summary>
     public class AppSearchEntry
     {
@@ -25,5 +25,15 @@ namespace Glance
         public string LaunchPath;
         public string Subtitle;
         public ImageSource IconSource;
+
+        /// <summary>
+        /// Jenis item: "app", "calc", "command", atau "web".
+        /// </summary>
+        public string EntryKind = "app";
+        public string EmojiIcon = "";
+        public string BadgeColorHex = "#1CE755";
+        public string ActionHint = "Open ↵";
+        public string CopyText = "";
+        public string CommandId = "";
     }
 }

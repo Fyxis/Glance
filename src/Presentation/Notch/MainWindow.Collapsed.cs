@@ -6,6 +6,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
+using System.Windows.Threading;
 using Path = System.Windows.Shapes.Path;
 using Point = System.Windows.Point;
 using Size = System.Windows.Size;
@@ -215,9 +216,91 @@ namespace Glance
             };
             collapsedSleepLayout.Children.Add(collapsedSleepTimeText);
 
+            // ---- Live Activity Toast layout: [Icon + Label]  [Progress Bar (opsional)]  [Value] ----
+            collapsedToastLayout = new Grid
+            {
+                Margin = new Thickness(11, 0, 12, 0),
+                VerticalAlignment = VerticalAlignment.Stretch,
+                Visibility = Visibility.Collapsed,
+                Opacity = 0
+            };
+            collapsedToastLayout.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            collapsedToastLayout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            collapsedToastLayout.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            collapsedToastLayout.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            toastIconBadge = new Border
+            {
+                Width = 22,
+                Height = 22,
+                CornerRadius = new CornerRadius(11),
+                Background = new SolidColorBrush(Color.FromArgb(45, 28, 231, 85)),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 8, 0)
+            };
+            toastIconText = new TextBlock
+            {
+                Text = "🔊",
+                FontSize = 11.5,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            toastIconBadge.Child = toastIconText;
+            Grid.SetColumn(toastIconBadge, 0);
+
+            toastTitleText = new TextBlock
+            {
+                Text = "Volume",
+                Foreground = Brushes.White,
+                FontSize = 12,
+                FontWeight = FontWeights.SemiBold,
+                VerticalAlignment = VerticalAlignment.Center,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Margin = new Thickness(0, 0, 8, 0)
+            };
+            Grid.SetColumn(toastTitleText, 1);
+
+            toastBarTrack = new Border
+            {
+                Width = 64,
+                Height = 5,
+                CornerRadius = new CornerRadius(2.5),
+                Background = new SolidColorBrush(Color.FromArgb(48, 255, 255, 255)),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 8, 0),
+                ClipToBounds = true
+            };
+            toastBarFill = new Border
+            {
+                Width = 32,
+                Height = 5,
+                CornerRadius = new CornerRadius(2.5),
+                Background = new SolidColorBrush(Color.FromRgb(56, 189, 248)),
+                HorizontalAlignment = HorizontalAlignment.Left
+            };
+            toastBarTrack.Child = toastBarFill;
+            Grid.SetColumn(toastBarTrack, 2);
+
+            toastValueText = new TextBlock
+            {
+                Text = "100%",
+                Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248)),
+                FontSize = 12,
+                FontWeight = FontWeights.Bold,
+                VerticalAlignment = VerticalAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            Grid.SetColumn(toastValueText, 3);
+
+            collapsedToastLayout.Children.Add(toastIconBadge);
+            collapsedToastLayout.Children.Add(toastTitleText);
+            collapsedToastLayout.Children.Add(toastBarTrack);
+            collapsedToastLayout.Children.Add(toastValueText);
+
             root.Children.Add(collapsedIdleLayout);
             root.Children.Add(collapsedMusicLayout);
             root.Children.Add(collapsedSleepLayout);
+            root.Children.Add(collapsedToastLayout);
             return root;
         }
 
@@ -366,7 +449,7 @@ namespace Glance
             }
 
             double targetWidth = hasLyric ? MusicLyricCollapsedWidth : MusicCollapsedWidth;
-            if (!isExpanded && !isSleeping && Math.Abs(notchBody.Width - targetWidth) > 1.5)
+            if (!isExpanded && !isSleeping && !isToastActive && Math.Abs(notchBody.Width - targetWidth) > 1.5)
             {
                 notchBody.BeginAnimation(WidthProperty, new DoubleAnimation(targetWidth, TimeSpan.FromMilliseconds(300))
                 {
@@ -390,7 +473,7 @@ namespace Glance
             if (wantMusic != isMusicMode)
             {
                 isMusicMode = wantMusic;
-                if (!isSleeping)
+                if (!isSleeping && !isToastActive)
                 {
                     collapsedIdleLayout.Visibility = isMusicMode ? Visibility.Collapsed : Visibility.Visible;
                     collapsedMusicLayout.Visibility = isMusicMode ? Visibility.Visible : Visibility.Collapsed;
@@ -407,7 +490,7 @@ namespace Glance
                     clockTimer.Interval = (isExpanded || isMusicMode) ? TimeSpan.FromMilliseconds(250) : TimeSpan.FromMilliseconds(1000);
                 }
 
-                if (!isExpanded && !isSleeping)
+                if (!isExpanded && !isSleeping && !isToastActive)
                 {
                     notchBody.BeginAnimation(WidthProperty, new DoubleAnimation(CurrentCollapsedWidth, TimeSpan.FromMilliseconds(340))
                     {
@@ -473,7 +556,7 @@ namespace Glance
 
         public void EnterSleepMode()
         {
-            if (isSleeping || isExpanded || IsPinned || notchBody == null) return;
+            if (isSleeping || isExpanded || IsPinned || isToastActive || notchBody == null) return;
             isSleeping = true;
 
             if (collapsedSleepTimeText != null)
@@ -557,6 +640,124 @@ namespace Glance
             if (!IsCompanionWindow && CompanionInstance != null)
             {
                 CompanionInstance.ApplySleepConfig(EnableSleepMode, SleepTimeoutSeconds);
+            }
+        }
+
+        /// <summary>
+        /// Menampilkan pop-up Live Activity Toast pada Notch (seperti Volume, Brightness, Charger, atau Clipboard).
+        /// </summary>
+        public void ShowLiveActivityToast(
+            string icon,
+            string title,
+            string valueText,
+            int progressPct,
+            bool showProgressBar,
+            Color accentColor,
+            int durationMs = 1850)
+        {
+            if (notchBody == null || collapsedToastLayout == null) return;
+
+            if (!IsCompanionWindow && CompanionInstance != null && CompanionInstance.IsVisible)
+            {
+                CompanionInstance.ShowLiveActivityToast(icon, title, valueText, progressPct, showProgressBar, accentColor, durationMs);
+            }
+
+            if (isExpanded) return;
+
+            if (isSleeping)
+            {
+                WakeFromSleepMode(false);
+            }
+            lastMouseMoveUtc = DateTime.UtcNow;
+
+            toastIconText.Text = icon ?? "🔔";
+            toastIconBadge.Background = new SolidColorBrush(Color.FromArgb(48, accentColor.R, accentColor.G, accentColor.B));
+            toastTitleText.Text = title ?? "";
+            toastValueText.Text = valueText ?? "";
+            toastValueText.Foreground = new SolidColorBrush(accentColor);
+
+            if (showProgressBar)
+            {
+                toastBarTrack.Visibility = Visibility.Visible;
+                toastBarFill.Background = new SolidColorBrush(accentColor);
+                double targetFillW = Math.Max(4.0, 64.0 * Math.Clamp(progressPct, 0, 100) / 100.0);
+                toastBarFill.BeginAnimation(WidthProperty, new DoubleAnimation(targetFillW, TimeSpan.FromMilliseconds(160))
+                {
+                    EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+                });
+            }
+            else
+            {
+                toastBarTrack.Visibility = Visibility.Collapsed;
+            }
+
+            if (!isToastActive)
+            {
+                isToastActive = true;
+                collapsedIdleLayout.Visibility = Visibility.Collapsed;
+                collapsedMusicLayout.Visibility = Visibility.Collapsed;
+                if (collapsedSleepLayout != null) collapsedSleepLayout.Visibility = Visibility.Collapsed;
+
+                collapsedToastLayout.Visibility = Visibility.Visible;
+                collapsedToastLayout.BeginAnimation(OpacityProperty, new DoubleAnimation(0.0, 1.0, TimeSpan.FromMilliseconds(180)));
+
+                notchBody.CornerRadius = new CornerRadius(18);
+                var ease = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.25 };
+                Duration dur = new Duration(TimeSpan.FromMilliseconds(260));
+                notchBody.BeginAnimation(WidthProperty, new DoubleAnimation(ToastCollapsedWidth, dur) { EasingFunction = ease });
+                notchBody.BeginAnimation(HeightProperty, new DoubleAnimation(CollapsedHeight, dur) { EasingFunction = ease });
+                notchBody.BeginAnimation(OpacityProperty, new DoubleAnimation(1.0, TimeSpan.FromMilliseconds(150)));
+            }
+
+            if (toastDismissTimer == null)
+            {
+                toastDismissTimer = new DispatcherTimer();
+                toastDismissTimer.Tick += (s, e) =>
+                {
+                    toastDismissTimer.Stop();
+                    DismissLiveActivityToast(true);
+                };
+            }
+            toastDismissTimer.Stop();
+            toastDismissTimer.Interval = TimeSpan.FromMilliseconds(Math.Max(800, durationMs));
+            toastDismissTimer.Start();
+        }
+
+        public void DismissLiveActivityToast(bool animate = true)
+        {
+            if (!isToastActive || notchBody == null) return;
+            isToastActive = false;
+            lastMouseMoveUtc = DateTime.UtcNow;
+
+            if (toastDismissTimer != null)
+            {
+                toastDismissTimer.Stop();
+            }
+
+            if (collapsedToastLayout != null)
+            {
+                collapsedToastLayout.BeginAnimation(OpacityProperty, null);
+                collapsedToastLayout.Opacity = 0;
+                collapsedToastLayout.Visibility = Visibility.Collapsed;
+            }
+
+            if (!isExpanded && !isSleeping)
+            {
+                collapsedIdleLayout.Visibility = isMusicMode ? Visibility.Collapsed : Visibility.Visible;
+                collapsedMusicLayout.Visibility = isMusicMode ? Visibility.Visible : Visibility.Collapsed;
+
+                if (animate)
+                {
+                    var ease = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.22 };
+                    Duration dur = new Duration(TimeSpan.FromMilliseconds(280));
+                    notchBody.BeginAnimation(WidthProperty, new DoubleAnimation(CurrentCollapsedWidth, dur) { EasingFunction = ease });
+                    notchBody.BeginAnimation(HeightProperty, new DoubleAnimation(CollapsedHeight, dur) { EasingFunction = ease });
+                }
+                else
+                {
+                    notchBody.BeginAnimation(WidthProperty, null);
+                    notchBody.Width = CurrentCollapsedWidth;
+                }
             }
         }
 
