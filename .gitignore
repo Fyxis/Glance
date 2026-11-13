@@ -17,3 +17,7 @@ obj/
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+
+# Offline self-contained installer (>100 MB GitHub Git push limit; upload to GitHub Releases instead)
+GlanceSetup.exe
+*.bak

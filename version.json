@@ -1,7 +1,7 @@
 ﻿{
-    "version":  "1.2.1",
-    "buildNumber":  20261113052002,
-    "publishedAt":  "2026-11-13 12:20:02",
+    "version":  "1.2.2",
+    "buildNumber":  20261113064757,
+    "publishedAt":  "2026-11-13 13:47:57",
     "downloadUrl":  "https://raw.githubusercontent.com/Fyxis/Glance/main/Glance.exe",
-    "releaseNotes":  "Penambahan fitur eksekusi perintah Terminal/CMD/PowerShell langsung dari Glance Search (misal: cmd ipconfig)."
+    "releaseNotes":  "Build self-contained .NET 8 dengan native WPF libraries tertanam (tanpa wajib install .NET Runtime terpisah di PC pengguna)."
 }

@@ -137,16 +137,16 @@ Glance was engineered from the ground up for zero-overhead, always-on desktop us
 
 ## 📦 Installation & Download
 
-### Option 1: Standalone Installer (Recommended)
-1. Download [**`GlanceSetup.exe`**](GlanceSetup.exe).
+### Option 1: Standalone Installer (Recommended — Zero Prerequisites)
+1. Download [**`GlanceSetup.exe`**](https://github.com/Fyxis/Glance/releases/latest) from the **Releases** page *(100% self-contained offline installer — no .NET 8 Runtime installation required)*.
 2. Run the installer.
 3. Choose your installation folder (defaults to `%LOCALAPPDATA%\Programs\Glance`).
 4. Keep **"Run at Startup Windows"** checked if you want Glance to start automatically when your PC boots.
 5. Click **"Install Now"**.
 
 ### Option 2: Portable Executable
-1. Download [**`Glance.exe`**](Glance.exe).
-2. Place it anywhere on your machine and launch it directly.
+1. Download [**`Glance.exe`**](Glance.exe) *(or from [Releases](https://github.com/Fyxis/Glance/releases/latest))*.
+2. Place it anywhere on your machine and launch it directly (self-contained single-file).
 
 ---
 
@@ -242,8 +242,8 @@ Glance/
 ├── build.ps1                           # Automated .NET 8 build & publish script
 ├── Glance.csproj                       # Main Glance .NET 8 project file
 ├── GlanceSetup.csproj                  # Standalone Installer project file
-├── Glance.exe                          # Precompiled portable executable
-├── GlanceSetup.exe                     # Precompiled standalone installer
+├── Glance.exe                          # Precompiled self-contained portable executable
+├── GlanceSetup.exe                     # Local self-contained offline installer (publish via GitHub Releases)
 └── README.md                           # Documentation
 ```
 

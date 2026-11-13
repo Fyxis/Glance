@@ -66,12 +66,12 @@ Start-Sleep -Milliseconds 300
 $tempGlancePublish = Join-Path $PSScriptRoot "bin\publish-glance"
 $tempSetupPublish = Join-Path $PSScriptRoot "bin\publish-setup"
 
-Write-Host "1. Compiling & Publishing Native .NET 8 Glance.exe..." -ForegroundColor Cyan
-& $dotnet publish "$PSScriptRoot\Glance.csproj" -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o $tempGlancePublish
+Write-Host "1. Compiling & Publishing Self-Contained .NET 8 Glance.exe..." -ForegroundColor Cyan
+& $dotnet publish "$PSScriptRoot\Glance.csproj" -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o $tempGlancePublish
 Copy-Item "$tempGlancePublish\Glance.exe" "$PSScriptRoot\Glance.exe" -Force
 
-Write-Host "2. Compiling & Publishing Standalone GlanceSetup.exe Installer..." -ForegroundColor Cyan
-& $dotnet publish "$PSScriptRoot\GlanceSetup.csproj" -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o $tempSetupPublish
+Write-Host "2. Compiling & Publishing Standalone Self-Contained GlanceSetup.exe Installer..." -ForegroundColor Cyan
+& $dotnet publish "$PSScriptRoot\GlanceSetup.csproj" -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o $tempSetupPublish
 Copy-Item "$tempSetupPublish\GlanceSetup.exe" "$PSScriptRoot\GlanceSetup.exe" -Force
 
 # Update installed copy if present

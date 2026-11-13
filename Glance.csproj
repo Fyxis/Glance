@@ -11,6 +11,7 @@
     <Nullable>disable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
 
     <!-- Low-Memory & High-Performance Desktop Optimizations for .NET 8 -->
     <!-- Workstation GC: Minimizes GC working set for desktop utilities -->
