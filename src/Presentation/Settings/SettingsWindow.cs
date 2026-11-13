@@ -464,8 +464,108 @@ namespace Glance
             RenderSearchOptionCard();
             sp.Children.Add(cardSearch);
 
+            // Option 6: Auto-Update via GitHub
+            sp.Children.Add(BuildUpdateOptionCard());
+
             sv.Content = sp;
             return sv;
+        }
+
+        private Border BuildUpdateOptionCard()
+        {
+            Border card = CreateOptionCard();
+            StackPanel sp = new StackPanel();
+
+            var localVer = GitHubUpdateService.GetLocalVersion();
+            Color acc = MainWindow.ColorFromHex(tempColorAccent, Color.FromRgb(28, 231, 85));
+
+            DockPanel dpHeader = new DockPanel { Margin = new Thickness(0, 0, 0, 6) };
+            Border badge = new Border
+            {
+                CornerRadius = new CornerRadius(5),
+                Padding = new Thickness(8, 2, 8, 2),
+                Background = new SolidColorBrush(Color.FromArgb(45, acc.R, acc.G, acc.B)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(120, acc.R, acc.G, acc.B)),
+                BorderThickness = new Thickness(1),
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            badge.Child = new TextBlock
+            {
+                Text = "v" + (localVer?.Version ?? "1.1.0"),
+                Foreground = new SolidColorBrush(acc),
+                FontSize = 10.5,
+                FontWeight = FontWeights.Bold
+            };
+            DockPanel.SetDock(badge, Dock.Right);
+            dpHeader.Children.Add(badge);
+
+            dpHeader.Children.Add(new TextBlock
+            {
+                Text = "Glance Auto-Update (GitHub):",
+                Foreground = Brushes.White,
+                FontSize = 12.5,
+                FontWeight = FontWeights.SemiBold,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            sp.Children.Add(dpHeader);
+
+            TextBlock lblUpdateStatus = new TextBlock
+            {
+                Text = "Otomatis memeriksa versi terbaru dari repositori GitHub (Fyxis/Glance) saat aplikasi berjalan.",
+                Foreground = new SolidColorBrush(Color.FromRgb(165, 165, 178)),
+                FontSize = 11,
+                Margin = new Thickness(0, 0, 0, 8),
+                TextWrapping = TextWrapping.Wrap
+            };
+            sp.Children.Add(lblUpdateStatus);
+
+            Button btnCheckUpdate = new Button
+            {
+                Content = "🔄 Check for Updates Now",
+                Height = 30,
+                Padding = new Thickness(12, 0, 12, 0),
+                Background = new SolidColorBrush(Color.FromArgb(55, 255, 255, 255)),
+                Foreground = Brushes.White,
+                FontSize = 11.5,
+                FontWeight = FontWeights.SemiBold,
+                BorderThickness = new Thickness(0),
+                Cursor = Cursors.Hand,
+                HorizontalAlignment = HorizontalAlignment.Left
+            };
+
+            btnCheckUpdate.Click += async (s, e) =>
+            {
+                btnCheckUpdate.IsEnabled = false;
+                btnCheckUpdate.Content = "⏳ Memeriksa GitHub...";
+                lblUpdateStatus.Foreground = new SolidColorBrush(Color.FromRgb(190, 190, 205));
+                lblUpdateStatus.Text = "Menghubungi GitHub untuk mengecek versi terbaru...";
+
+                var res = await GitHubUpdateService.CheckForUpdateAsync();
+                btnCheckUpdate.IsEnabled = true;
+                btnCheckUpdate.Content = "🔄 Check for Updates Now";
+
+                if (res.IsUpdateAvailable && res.RemoteVersion != null)
+                {
+                    lblUpdateStatus.Foreground = new SolidColorBrush(Color.FromRgb(28, 231, 85));
+                    lblUpdateStatus.Text = $"✓ Versi baru ditemukan (v{res.RemoteVersion.Version})! Membuka jendela pembaruan...";
+                    UpdateNotificationWindow.ShowOrActivate(res.LocalVersion, res.RemoteVersion);
+                }
+                else if (!string.IsNullOrEmpty(res.ErrorMessage))
+                {
+                    lblUpdateStatus.Foreground = new SolidColorBrush(Color.FromRgb(248, 113, 113));
+                    lblUpdateStatus.Text = "Gagal memeriksa update: " + res.ErrorMessage;
+                }
+                else
+                {
+                    lblUpdateStatus.Foreground = new SolidColorBrush(Color.FromRgb(28, 231, 85));
+                    lblUpdateStatus.Text = $"✓ Anda sudah menggunakan versi terbaru (v{res.LocalVersion?.Version ?? "1.1.0"}).";
+                }
+            };
+
+            sp.Children.Add(btnCheckUpdate);
+            card.Child = sp;
+            return card;
         }
 
         private void RenderSearchOptionCard()

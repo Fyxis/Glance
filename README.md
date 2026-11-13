@@ -167,7 +167,8 @@ Glance/
 │   │       ├── AppConfig.cs            # Application configuration & color/hotkey preferences
 │   │       ├── MediaModels.cs          # LyricLine, LrcSearchItem, MediaSnapshot
 │   │       ├── ProductivityModels.cs   # NoteItem, ClipItem, ShelfItem
-│   │       └── SystemModels.cs         # DriveStatInfo, AppSearchEntry
+│   │       ├── SystemModels.cs         # DriveStatInfo, AppSearchEntry
+│   │       └── UpdateModels.cs         # AppVersionManifest & UpdateCheckResult
 │   │
 │   ├── Application/                    # 2. Application Layer (Business logic & services)
 │   │   └── Services/
@@ -183,6 +184,8 @@ Glance/
 │   │   ├── Persistence/
 │   │   │   ├── JsonHelper.cs           # JSON serialization helper
 │   │   │   └── StartupManager.cs       # Windows Registry CurrentVersion\Run startup manager
+│   │   ├── Updater/
+│   │   │   └── GitHubUpdateService.cs  # Auto-Update checker, binary downloader & self-restart installer
 │   │   └── Win32/
 │   │       ├── MemoryOptimizer.cs      # Native working-set memory trimmer (psapi.dll / kernel32.dll)
 │   │       └── NativeMethods.cs        # Win32 P/Invoke declarations (user32, dwmapi, gdi32, wlanapi)
@@ -203,8 +206,10 @@ Glance/
 │   │   │       └── MainWindow.SlideShelf.cs     # Slide 5: Drag-and-Drop File Staging Shelf
 │   │   ├── Search/
 │   │   │   └── SpotlightWindow.cs      # Glance Search (macOS Spotlight-style app launcher)
-│   │   └── Settings/
-│   │       └── SettingsWindow.cs       # Multi-tab Settings & Color/Hotkey Customizer dialog
+│   │   ├── Settings/
+│   │   │   └── SettingsWindow.cs       # Multi-tab Settings & Color/Hotkey Customizer dialog
+│   │   └── Updater/
+│   │       └── UpdateNotificationWindow.cs # Auto-Update notification dialog (Update / Cancel + progress bar)
 │   │
 │   ├── Installer/                      # Standalone Setup Installer project files
 │   │   └── SetupInstaller.cs           # Setup GUI, ShellLink shortcut creator & Uninstaller
@@ -212,6 +217,7 @@ Glance/
 │   ├── Program.cs                      # Application entry point & single-instance guard
 │   └── app.ico                         # Application icon
 │
+├── version.json                        # Auto-incremented version manifest for GitHub Auto-Update
 ├── build.ps1                           # Automated .NET 8 build & publish script
 ├── Glance.csproj                       # Main Glance .NET 8 project file
 ├── GlanceSetup.csproj                  # Standalone Installer project file

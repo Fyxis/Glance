@@ -1,3 +1,8 @@
+param(
+    [string]$Version = "",
+    [string]$Notes = ""
+)
+
 $ErrorActionPreference = 'Stop'
 
 # Locate dotnet executable
@@ -11,6 +16,49 @@ if (Test-Path "$HOME\.dotnet\dotnet.exe") {
 } else {
     throw "dotnet SDK 8.0+ not found. Please install .NET 8 SDK."
 }
+
+# 0. Update version.json for GitHub Auto-Update before compiling so the embedded manifest matches
+$versionFilePath = Join-Path $PSScriptRoot "version.json"
+$currentVer = "1.1.0"
+$currentNotes = "Pembaruan fitur dan peningkatan performa Glance."
+
+if (Test-Path $versionFilePath) {
+    try {
+        $existingJson = Get-Content $versionFilePath -Raw | ConvertFrom-Json
+        if ($existingJson.version) {
+            $parts = $existingJson.version.Split('.')
+            if ($parts.Length -eq 3 -and [string]::IsNullOrWhiteSpace($Version)) {
+                $patch = [int]$parts[2] + 1
+                $currentVer = "$($parts[0]).$($parts[1]).$patch"
+            } else {
+                $currentVer = $existingJson.version
+            }
+        }
+        if ($existingJson.releaseNotes) {
+            $currentNotes = $existingJson.releaseNotes
+        }
+    } catch { }
+}
+
+if (-not [string]::IsNullOrWhiteSpace($Version)) {
+    $currentVer = $Version.TrimStart('v', 'V')
+}
+if (-not [string]::IsNullOrWhiteSpace($Notes)) {
+    $currentNotes = $Notes
+}
+
+$buildNum = [int64](Get-Date).ToUniversalTime().ToString("yyyyMMddHHmmss")
+$pubDate = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+
+$manifestObj = [ordered]@{
+    version      = $currentVer
+    buildNumber  = $buildNum
+    publishedAt  = $pubDate
+    downloadUrl  = "https://raw.githubusercontent.com/Fyxis/Glance/main/Glance.exe"
+    releaseNotes = $currentNotes
+}
+$manifestObj | ConvertTo-Json -Depth 4 | Set-Content -Path $versionFilePath -Encoding UTF8
+Write-Host "0. Updated version.json -> v$currentVer (Build $buildNum)" -ForegroundColor Yellow
 
 Stop-Process -Name Glance, GlanceSetup, DynamicIsland, DynamicIslandSetup -Force -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 300
@@ -39,4 +87,4 @@ if (Test-Path $installedLegacyDir) {
 # Clean temporary folders
 Remove-Item -Recurse -Force $tempGlancePublish, $tempSetupPublish -ErrorAction SilentlyContinue
 
-Write-Host "Done! Glance.exe and GlanceSetup.exe compiled successfully with .NET 8." -ForegroundColor Green
+Write-Host "Done! Glance.exe (v$currentVer) and GlanceSetup.exe compiled successfully with .NET 8." -ForegroundColor Green

@@ -25,6 +25,9 @@
 
   <ItemGroup>
     <Compile Remove="src\Installer\**\*.cs" />
+    <EmbeddedResource Include="version.json">
+      <LogicalName>version.json</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 
   <ItemGroup>

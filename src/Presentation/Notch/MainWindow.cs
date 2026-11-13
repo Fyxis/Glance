@@ -666,6 +666,22 @@ namespace Glance
                     ApplyCustomColors();
                     ApplySlideVisibilityConfig();
                     ApplyDisplayMode(DisplayMode);
+
+                    // Auto-Update Check on Startup (after 5s) & Periodic Check (every 15 mins)
+                    var startupUpdateTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5.0) };
+                    startupUpdateTimer.Tick += (s, ev) =>
+                    {
+                        startupUpdateTimer.Stop();
+                        CheckForUpdatesInteractive(false);
+                    };
+                    startupUpdateTimer.Start();
+
+                    var periodicUpdateTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(15.0) };
+                    periodicUpdateTimer.Tick += (s, ev) =>
+                    {
+                        CheckForUpdatesInteractive(false);
+                    };
+                    periodicUpdateTimer.Start();
                 }
             }
             catch (Exception ex)
@@ -1036,6 +1052,7 @@ namespace Glance
             menu.Items.Add(traySearchItem);
 
             menu.Items.Add("Glance Settings...", null, (s, e) => Dispatcher.Invoke(OpenSettingsDialog));
+            menu.Items.Add("Check for Updates...", null, (s, e) => Dispatcher.Invoke(() => CheckForUpdatesInteractive(true)));
 
             int screenCount = Forms.Screen.AllScreens.Length;
             Forms.ToolStripMenuItem screenSubMenu = new Forms.ToolStripMenuItem("Display Selection");
@@ -1083,6 +1100,43 @@ namespace Glance
                 activeSettingsWin.Closed += (s, e) => activeSettingsWin = null;
                 activeSettingsWin.Show();
                 activeSettingsWin.Activate();
+            }
+            catch { }
+        }
+
+        public async void CheckForUpdatesInteractive(bool showUpToDateAlert)
+        {
+            try
+            {
+                var result = await GitHubUpdateService.CheckForUpdateAsync();
+                if (result.IsUpdateAvailable && result.RemoteVersion != null)
+                {
+                    if (showUpToDateAlert || !GitHubUpdateService.IsBuildDismissed(result.RemoteVersion.BuildNumber))
+                    {
+                        UpdateNotificationWindow.ShowOrActivate(result.LocalVersion, result.RemoteVersion);
+                    }
+                }
+                else if (showUpToDateAlert)
+                {
+                    if (!string.IsNullOrEmpty(result.ErrorMessage))
+                    {
+                        MessageBox.Show(
+                            "Gagal memeriksa pembaruan dari GitHub:\n" + result.ErrorMessage,
+                            "Glance Auto-Update",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Warning
+                        );
+                    }
+                    else
+                    {
+                        MessageBox.Show(
+                            $"Anda sudah menggunakan versi Glance terbaru (v{result.LocalVersion?.Version ?? "1.1.0"}).",
+                            "Glance Auto-Update",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Information
+                        );
+                    }
+                }
             }
             catch { }
         }
