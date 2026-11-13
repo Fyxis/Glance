@@ -27,7 +27,7 @@ namespace Glance
         public ImageSource IconSource;
 
         /// <summary>
-        /// Jenis item: "app", "calc", "command", atau "web".
+        /// Jenis item: "app", "calc", "command", "terminal", atau "web".
         /// </summary>
         public string EntryKind = "app";
         public string EmojiIcon = "";
@@ -35,5 +35,7 @@ namespace Glance
         public string ActionHint = "Open ↵";
         public string CopyText = "";
         public string CommandId = "";
+        public string LaunchArguments = "";
+        public string WorkingDir = "";
     }
 }

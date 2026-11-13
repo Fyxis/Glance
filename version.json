@@ -1,7 +1,7 @@
 ﻿{
-    "version":  "1.2.0",
-    "buildNumber":  20261113050653,
-    "publishedAt":  "2026-11-13 12:06:53",
+    "version":  "1.2.1",
+    "buildNumber":  20261113052002,
+    "publishedAt":  "2026-11-13 12:20:02",
     "downloadUrl":  "https://raw.githubusercontent.com/Fyxis/Glance/main/Glance.exe",
-    "releaseNotes":  "Penambahan fitur Live Activities (Volume, Brightness, Charger, Clipboard Toast) dan Upgrade Glance Search (Kalkulator Instan, System Commands, \u0026 Web Search)."
+    "releaseNotes":  "Penambahan fitur eksekusi perintah Terminal/CMD/PowerShell langsung dari Glance Search (misal: cmd ipconfig)."
 }

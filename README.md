@@ -48,6 +48,7 @@ Unlike heavy modern utilities wrapped in Electron or Chromium that devour hundre
 * **macOS Spotlight & Raycast-style Launcher**: Centered keyboard-first search bar that appears instantly with `Ctrl + Shift + P` over a Gaussian frosted-glass backdrop.
 * **Instant Fuzzy App Search**: Rapidly finds applications across the Start Menu, Desktop, and Windows Registry App Paths.
 * **Instant Math Calculator (`🧮`)**: Type expressions like `250 * 14`, `150000 - 20%`, `2^10`, or `sqrt(144)` to evaluate in real time—press `Enter` to copy the result to the Clipboard.
+* **Direct Terminal Command Runner (`💻`)**: Type `cmd <command>` (e.g., `cmd ipconfig`, `cmd ping google.com`), `> <command>`, or `ps <command>` to immediately launch Command Prompt or PowerShell (normal or Administrator) and execute that command directly.
 * **Quick System Commands (`⚡`)**: Run system actions directly from search (`Lock Screen`, `Sleep Computer`, `Empty Recycle Bin`, `Mute / Unmute Audio`, `Restart Windows Explorer`, `Open Task Manager`, `Glance Settings`, `Toggle Sleep Mode`).
 * **Web & AI Search Shortcuts (`🌐`)**: Use prefixes (`g <query>` for Google, `yt <query>` for YouTube, `gh <query>` for GitHub, `ai <query>` for ChatGPT) or select the automatic Google/YouTube fallback options for any query.
 * **Keyboard Navigation**: Navigate matches with `↑` / `↓` and press `Enter` to execute, or `ESC` to dismiss.

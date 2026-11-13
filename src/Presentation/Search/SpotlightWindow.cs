@@ -296,9 +296,9 @@ namespace Glance
             Grid textHost = new Grid { VerticalAlignment = VerticalAlignment.Center };
             placeholderText = new TextBlock
             {
-                Text = "Search apps, calculate (250*14), commands, or web (g / yt / ai)...",
+                Text = "Search apps, calculate (250*14), terminal (cmd ipconfig), or web (g / yt)...",
                 Foreground = new SolidColorBrush(Color.FromRgb(125, 125, 138)),
-                FontSize = 16,
+                FontSize = 15.5,
                 FontWeight = FontWeights.Medium,
                 VerticalAlignment = VerticalAlignment.Center,
                 IsHitTestVisible = false
@@ -483,6 +483,13 @@ namespace Glance
             if (SearchQueryService.TryEvaluateCalculator(rawInput, out AppSearchEntry calcEntry))
             {
                 combined.Add(calcEntry);
+            }
+
+            // 1b. Direct Terminal Commands (e.g. "cmd ipconfig", "> ping google.com", "ps Get-Process")
+            var termEntries = SearchQueryService.GetTerminalCommandEntries(rawInput, out bool isTerminalPrefix);
+            if (isTerminalPrefix)
+            {
+                combined.AddRange(termEntries);
             }
 
             // 2. Check Web Search Prefixes (e.g. "g ", "yt ", "gh ", "ai ")
@@ -774,6 +781,38 @@ namespace Glance
                 if (entry.EntryKind == "command")
                 {
                     ExecuteSystemCommand(entry.CommandId);
+                    return;
+                }
+
+                if (entry.EntryKind == "terminal")
+                {
+                    var psi = new ProcessStartInfo
+                    {
+                        FileName = entry.LaunchPath,
+                        Arguments = entry.LaunchArguments ?? "",
+                        UseShellExecute = true
+                    };
+                    if (!string.IsNullOrEmpty(entry.WorkingDir) && Directory.Exists(entry.WorkingDir))
+                    {
+                        psi.WorkingDirectory = entry.WorkingDir;
+                    }
+                    if (entry.CommandId == "runas")
+                    {
+                        psi.Verb = "runas";
+                    }
+                    Process.Start(psi);
+
+                    string preview = entry.CopyText ?? "";
+                    if (preview.Length > 14) preview = preview.Substring(0, 14) + "…";
+                    MainWindow.PrimaryInstance?.ShowLiveActivityToast(
+                        "💻",
+                        "Terminal",
+                        preview,
+                        100,
+                        false,
+                        Color.FromRgb(16, 185, 129),
+                        1800
+                    );
                     return;
                 }
 

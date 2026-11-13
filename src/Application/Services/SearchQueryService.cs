@@ -305,5 +305,119 @@ namespace Glance
                 ActionHint = "Search ↵"
             };
         }
+
+        /// <summary>
+        /// Mendeteksi perintah terminal langsung seperti "cmd ipconfig", "> ping google.com", "ps Get-Process", atau "term dir".
+        /// </summary>
+        public static List<AppSearchEntry> GetTerminalCommandEntries(string rawInput, out bool isTerminalPrefix)
+        {
+            isTerminalPrefix = false;
+            var list = new List<AppSearchEntry>();
+            if (string.IsNullOrWhiteSpace(rawInput)) return list;
+
+            string trimmed = rawInput.Trim();
+            string lower = trimmed.ToLowerInvariant();
+            string userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+            bool preferPowerShell = false;
+            string cmdText = null;
+
+            if (lower.StartsWith("cmd "))
+            {
+                cmdText = trimmed.Substring(4).Trim();
+                preferPowerShell = false;
+            }
+            else if (lower.StartsWith("> "))
+            {
+                cmdText = trimmed.Substring(2).Trim();
+                preferPowerShell = false;
+            }
+            else if (lower.StartsWith(">") && trimmed.Length > 1)
+            {
+                cmdText = trimmed.Substring(1).Trim();
+                preferPowerShell = false;
+            }
+            else if (lower.StartsWith("ps "))
+            {
+                cmdText = trimmed.Substring(3).Trim();
+                preferPowerShell = true;
+            }
+            else if (lower.StartsWith("powershell "))
+            {
+                cmdText = trimmed.Substring(11).Trim();
+                preferPowerShell = true;
+            }
+            else if (lower.StartsWith("term ") || lower.StartsWith("wt "))
+            {
+                int spaceIdx = trimmed.IndexOf(' ');
+                cmdText = spaceIdx > 0 ? trimmed.Substring(spaceIdx + 1).Trim() : "";
+                preferPowerShell = false;
+            }
+
+            if (string.IsNullOrWhiteSpace(cmdText))
+            {
+                return list;
+            }
+
+            isTerminalPrefix = true;
+
+            var cmdEntry = new AppSearchEntry
+            {
+                EntryKind = "terminal",
+                Name = $"Run in CMD: {cmdText}",
+                Subtitle = $"Command Prompt • Opens cmd.exe and runs \"{cmdText}\"",
+                EmojiIcon = "💻",
+                BadgeColorHex = "#10B981",
+                LaunchPath = "cmd.exe",
+                LaunchArguments = "/K " + cmdText,
+                WorkingDir = userProfile,
+                CopyText = cmdText,
+                ActionHint = "Run CMD ↵"
+            };
+
+            string escapedPs = cmdText.Replace("\"", "`\"");
+            var psEntry = new AppSearchEntry
+            {
+                EntryKind = "terminal",
+                Name = $"Run in PowerShell: {cmdText}",
+                Subtitle = $"Windows PowerShell • Opens PowerShell and runs \"{cmdText}\"",
+                EmojiIcon = "⚡",
+                BadgeColorHex = "#38BDF8",
+                LaunchPath = "powershell.exe",
+                LaunchArguments = $"-NoExit -Command \"{escapedPs}\"",
+                WorkingDir = userProfile,
+                CopyText = cmdText,
+                ActionHint = "Run PS ↵"
+            };
+
+            var adminEntry = new AppSearchEntry
+            {
+                EntryKind = "terminal",
+                CommandId = "runas",
+                Name = preferPowerShell ? $"Run in PowerShell (Admin): {cmdText}" : $"Run in CMD (Admin): {cmdText}",
+                Subtitle = $"Administrator Terminal • Runs \"{cmdText}\" with elevated privileges",
+                EmojiIcon = "🛡️",
+                BadgeColorHex = "#F59E0B",
+                LaunchPath = preferPowerShell ? "powershell.exe" : "cmd.exe",
+                LaunchArguments = preferPowerShell ? $"-NoExit -Command \"{escapedPs}\"" : ("/K " + cmdText),
+                WorkingDir = userProfile,
+                CopyText = cmdText,
+                ActionHint = "Admin ↵"
+            };
+
+            if (preferPowerShell)
+            {
+                list.Add(psEntry);
+                list.Add(cmdEntry);
+            }
+            else
+            {
+                list.Add(cmdEntry);
+                list.Add(psEntry);
+            }
+            list.Add(adminEntry);
+
+            return list;
+        }
     }
 }
