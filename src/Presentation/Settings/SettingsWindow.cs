@@ -25,6 +25,9 @@ namespace Glance
         private RadioButton rbScreenBoth;
         private Slider sliderAlpha;
         private TextBlock lblAlphaVal;
+        private CheckBox chkSleepMode;
+        private Slider sliderSleepTimeout;
+        private TextBlock lblSleepTimeoutVal;
 
         // Tab 2: Kustom Warna
         private string tempColorAccent;
@@ -457,18 +460,97 @@ namespace Glance
             cardAlpha.Child = spAlpha;
             sp.Children.Add(cardAlpha);
 
-            // Option 5: Glance Search Component Settings (ON/OFF Toggle, Installer, Shortcut Recorder)
+            // Option 5: Notch Idle Sleep Mode (Always-On Display when mouse is idle)
+            sp.Children.Add(BuildSleepModeOptionCard());
+
+            // Option 6: Glance Search Component Settings (ON/OFF Toggle, Installer, Shortcut Recorder)
             cardSearch = CreateOptionCard();
             spSearchBody = new StackPanel();
             cardSearch.Child = spSearchBody;
             RenderSearchOptionCard();
             sp.Children.Add(cardSearch);
 
-            // Option 6: Auto-Update via GitHub
+            // Option 7: Auto-Update via GitHub
             sp.Children.Add(BuildUpdateOptionCard());
 
             sv.Content = sp;
             return sv;
+        }
+
+        private Border BuildSleepModeOptionCard()
+        {
+            Border card = CreateOptionCard();
+            StackPanel sp = new StackPanel();
+
+            bool curSleepEnabled = parentIsland == null || parentIsland.EnableSleepMode;
+            int curTimeoutSec = parentIsland != null ? parentIsland.SleepTimeoutSeconds : 5;
+            Color acc = MainWindow.ColorFromHex(tempColorAccent, Color.FromRgb(28, 231, 85));
+
+            chkSleepMode = new CheckBox
+            {
+                Content = "Enable Notch Sleep Mode (Always-On Display when mouse is idle)",
+                Foreground = Brushes.White,
+                FontSize = 12.5,
+                FontWeight = FontWeights.SemiBold,
+                IsChecked = curSleepEnabled,
+                Cursor = Cursors.Hand,
+                VerticalContentAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+            sp.Children.Add(chkSleepMode);
+
+            DockPanel dpTimeout = new DockPanel { Margin = new Thickness(0, 0, 0, 4) };
+            lblSleepTimeoutVal = new TextBlock
+            {
+                Text = curTimeoutSec + " sec",
+                Foreground = new SolidColorBrush(acc),
+                FontSize = 12,
+                FontWeight = FontWeights.Bold,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            DockPanel.SetDock(lblSleepTimeoutVal, Dock.Right);
+            dpTimeout.Children.Add(lblSleepTimeoutVal);
+            dpTimeout.Children.Add(new TextBlock
+            {
+                Text = "Mouse Idle Timeout before Sleep Mode:",
+                Foreground = new SolidColorBrush(Color.FromRgb(190, 190, 205)),
+                FontSize = 11.5,
+                FontWeight = FontWeights.Medium
+            });
+            sp.Children.Add(dpTimeout);
+
+            sliderSleepTimeout = new Slider
+            {
+                Minimum = 2,
+                Maximum = 30,
+                Value = curTimeoutSec,
+                TickFrequency = 1,
+                IsSnapToTickEnabled = true,
+                IsEnabled = curSleepEnabled,
+                Cursor = Cursors.Hand
+            };
+
+            sliderSleepTimeout.ValueChanged += (s, e) =>
+            {
+                int sec = (int)Math.Round(sliderSleepTimeout.Value);
+                if (lblSleepTimeoutVal != null)
+                {
+                    lblSleepTimeoutVal.Text = sec + " sec";
+                }
+            };
+
+            chkSleepMode.Checked += (s, e) =>
+            {
+                if (sliderSleepTimeout != null) sliderSleepTimeout.IsEnabled = true;
+            };
+            chkSleepMode.Unchecked += (s, e) =>
+            {
+                if (sliderSleepTimeout != null) sliderSleepTimeout.IsEnabled = false;
+            };
+
+            sp.Children.Add(sliderSleepTimeout);
+            card.Child = sp;
+            return card;
         }
 
         private Border BuildUpdateOptionCard()
@@ -1305,6 +1387,10 @@ namespace Glance
                     parentIsland.ShowSlideShelf = sh;
 
                     parentIsland.SetPinned(chkPin.IsChecked == true);
+                    parentIsland.ApplySleepConfig(
+                        chkSleepMode != null && chkSleepMode.IsChecked == true,
+                        sliderSleepTimeout != null ? (int)Math.Round(sliderSleepTimeout.Value) : 5
+                    );
                     parentIsland.ApplySearchConfig(tempIsSearchInstalled, tempIsSearchEnabled);
                     parentIsland.UpdateGlobalHotkey(tempHotkeyModifiers, tempHotkeyKey, tempHotkeyDisplay);
                     parentIsland.ApplyCustomColors();

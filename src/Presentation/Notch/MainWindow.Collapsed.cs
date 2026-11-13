@@ -196,8 +196,28 @@ namespace Glance
             collapsedMusicLayout.Children.Add(collapsedMusicMidGrid);
             collapsedMusicLayout.Children.Add(wavePanel);
 
+            // ---- Sleep / Always-On Display (AOD) layout: [Tengah: Hanya Jam Minimalis] ----
+            collapsedSleepLayout = new Grid
+            {
+                VerticalAlignment = VerticalAlignment.Stretch,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                Visibility = Visibility.Collapsed,
+                Opacity = 0
+            };
+            collapsedSleepTimeText = new TextBlock
+            {
+                Text = DateTime.Now.ToString("HH:mm", CultureInfo.InvariantCulture),
+                Foreground = new SolidColorBrush(Color.FromRgb(225, 225, 235)),
+                FontSize = 12.5,
+                FontWeight = FontWeights.SemiBold,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            collapsedSleepLayout.Children.Add(collapsedSleepTimeText);
+
             root.Children.Add(collapsedIdleLayout);
             root.Children.Add(collapsedMusicLayout);
+            root.Children.Add(collapsedSleepLayout);
             return root;
         }
 
@@ -346,7 +366,7 @@ namespace Glance
             }
 
             double targetWidth = hasLyric ? MusicLyricCollapsedWidth : MusicCollapsedWidth;
-            if (!isExpanded && Math.Abs(notchBody.Width - targetWidth) > 1.5)
+            if (!isExpanded && !isSleeping && Math.Abs(notchBody.Width - targetWidth) > 1.5)
             {
                 notchBody.BeginAnimation(WidthProperty, new DoubleAnimation(targetWidth, TimeSpan.FromMilliseconds(300))
                 {
@@ -370,8 +390,11 @@ namespace Glance
             if (wantMusic != isMusicMode)
             {
                 isMusicMode = wantMusic;
-                collapsedIdleLayout.Visibility = isMusicMode ? Visibility.Collapsed : Visibility.Visible;
-                collapsedMusicLayout.Visibility = isMusicMode ? Visibility.Visible : Visibility.Collapsed;
+                if (!isSleeping)
+                {
+                    collapsedIdleLayout.Visibility = isMusicMode ? Visibility.Collapsed : Visibility.Visible;
+                    collapsedMusicLayout.Visibility = isMusicMode ? Visibility.Visible : Visibility.Collapsed;
+                }
 
                 if (waveformTimer != null)
                 {
@@ -384,7 +407,7 @@ namespace Glance
                     clockTimer.Interval = (isExpanded || isMusicMode) ? TimeSpan.FromMilliseconds(250) : TimeSpan.FromMilliseconds(1000);
                 }
 
-                if (!isExpanded)
+                if (!isExpanded && !isSleeping)
                 {
                     notchBody.BeginAnimation(WidthProperty, new DoubleAnimation(CurrentCollapsedWidth, TimeSpan.FromMilliseconds(340))
                     {
@@ -396,6 +419,144 @@ namespace Glance
             if (isMusicMode)
             {
                 UpdateCollapsedMusicUI();
+            }
+        }
+
+        private void OnMouseIdleTick(object sender, EventArgs e)
+        {
+            if (IsCompanionWindow) return;
+
+            NativeMethods.POINT pt;
+            if (!NativeMethods.GetCursorPos(out pt)) return;
+
+            bool moved = Math.Abs(pt.X - lastMousePt.X) >= 2 || Math.Abs(pt.Y - lastMousePt.Y) >= 2;
+            if (moved)
+            {
+                lastMousePt = pt;
+                lastMouseMoveUtc = DateTime.UtcNow;
+
+                if (isSleeping)
+                {
+                    WakeFromSleepMode(true);
+                }
+                if (CompanionInstance != null && CompanionInstance.isSleeping)
+                {
+                    CompanionInstance.WakeFromSleepMode(true);
+                }
+                return;
+            }
+
+            bool anyExpanded = isExpanded || (CompanionInstance != null && CompanionInstance.isExpanded);
+            bool searchVisible = spotlightWin != null && spotlightWin.IsVisible;
+
+            if (!EnableSleepMode || IsPinned || anyExpanded || searchVisible)
+            {
+                lastMouseMoveUtc = DateTime.UtcNow;
+                if (isSleeping) WakeFromSleepMode(true);
+                if (CompanionInstance != null && CompanionInstance.isSleeping) CompanionInstance.WakeFromSleepMode(true);
+                return;
+            }
+
+            double idleSec = (DateTime.UtcNow - lastMouseMoveUtc).TotalSeconds;
+            if (idleSec >= SleepTimeoutSeconds)
+            {
+                if (!isSleeping)
+                {
+                    EnterSleepMode();
+                }
+                if (CompanionInstance != null && CompanionInstance.IsVisible && !CompanionInstance.isSleeping)
+                {
+                    CompanionInstance.EnterSleepMode();
+                }
+            }
+        }
+
+        public void EnterSleepMode()
+        {
+            if (isSleeping || isExpanded || IsPinned || notchBody == null) return;
+            isSleeping = true;
+
+            if (collapsedSleepTimeText != null)
+            {
+                collapsedSleepTimeText.Text = DateTime.Now.ToString("HH:mm", CultureInfo.InvariantCulture);
+            }
+
+            collapsedIdleLayout.Visibility = Visibility.Collapsed;
+            collapsedMusicLayout.Visibility = Visibility.Collapsed;
+
+            if (collapsedSleepLayout != null)
+            {
+                collapsedSleepLayout.Visibility = Visibility.Visible;
+                collapsedSleepLayout.BeginAnimation(OpacityProperty, new DoubleAnimation(0.0, 1.0, TimeSpan.FromMilliseconds(320)));
+            }
+
+            notchBody.CornerRadius = new CornerRadius(14);
+            var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
+            Duration dur = new Duration(TimeSpan.FromMilliseconds(360));
+
+            notchBody.BeginAnimation(WidthProperty, new DoubleAnimation(SleepCollapsedWidth, dur) { EasingFunction = ease });
+            notchBody.BeginAnimation(HeightProperty, new DoubleAnimation(SleepCollapsedHeight, dur) { EasingFunction = ease });
+            notchBody.BeginAnimation(OpacityProperty, new DoubleAnimation(0.42, dur) { EasingFunction = ease });
+        }
+
+        public void WakeFromSleepMode(bool animate = true)
+        {
+            if (!isSleeping || notchBody == null) return;
+            isSleeping = false;
+            lastMouseMoveUtc = DateTime.UtcNow;
+
+            if (collapsedSleepLayout != null)
+            {
+                collapsedSleepLayout.BeginAnimation(OpacityProperty, null);
+                collapsedSleepLayout.Opacity = 0;
+                collapsedSleepLayout.Visibility = Visibility.Collapsed;
+            }
+
+            collapsedIdleLayout.Visibility = isMusicMode ? Visibility.Collapsed : Visibility.Visible;
+            collapsedMusicLayout.Visibility = isMusicMode ? Visibility.Visible : Visibility.Collapsed;
+
+            if (!isExpanded)
+            {
+                notchBody.CornerRadius = new CornerRadius(18);
+                if (animate)
+                {
+                    var ease = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.22 };
+                    Duration dur = new Duration(TimeSpan.FromMilliseconds(260));
+                    notchBody.BeginAnimation(WidthProperty, new DoubleAnimation(CurrentCollapsedWidth, dur) { EasingFunction = ease });
+                    notchBody.BeginAnimation(HeightProperty, new DoubleAnimation(CollapsedHeight, dur) { EasingFunction = ease });
+                    notchBody.BeginAnimation(OpacityProperty, new DoubleAnimation(1.0, TimeSpan.FromMilliseconds(180)));
+                }
+                else
+                {
+                    notchBody.BeginAnimation(WidthProperty, null);
+                    notchBody.BeginAnimation(HeightProperty, null);
+                    notchBody.BeginAnimation(OpacityProperty, null);
+                    notchBody.Width = CurrentCollapsedWidth;
+                    notchBody.Height = CollapsedHeight;
+                    notchBody.Opacity = 1.0;
+                }
+            }
+            else
+            {
+                notchBody.BeginAnimation(OpacityProperty, null);
+                notchBody.Opacity = 1.0;
+            }
+        }
+
+        public void ApplySleepConfig(bool enabled, int timeoutSeconds)
+        {
+            EnableSleepMode = enabled;
+            SleepTimeoutSeconds = Math.Clamp(timeoutSeconds, 2, 120);
+            lastMouseMoveUtc = DateTime.UtcNow;
+
+            if (!EnableSleepMode && isSleeping)
+            {
+                WakeFromSleepMode(true);
+            }
+
+            if (!IsCompanionWindow && CompanionInstance != null)
+            {
+                CompanionInstance.ApplySleepConfig(EnableSleepMode, SleepTimeoutSeconds);
             }
         }
 

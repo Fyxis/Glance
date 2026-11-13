@@ -42,7 +42,9 @@ namespace Glance
                     hotkeyKey = HotkeyKey,
                     hotkeyDisplay = HotkeyDisplay,
                     isSearchInstalled = IsSearchInstalled,
-                    isSearchEnabled = IsSearchEnabled
+                    isSearchEnabled = IsSearchEnabled,
+                    enableSleepMode = EnableSleepMode,
+                    sleepTimeoutSeconds = SleepTimeoutSeconds
                 };
                 File.WriteAllText(configFilePath, json.Serialize(cfg), Encoding.UTF8);
             }
@@ -93,6 +95,11 @@ namespace Glance
 
                         IsSearchInstalled = cfg.isSearchInstalled;
                         IsSearchEnabled = cfg.isSearchEnabled;
+
+                        EnableSleepMode = cfg.enableSleepMode;
+                        SleepTimeoutSeconds = (cfg.sleepTimeoutSeconds >= 2 && cfg.sleepTimeoutSeconds <= 120)
+                            ? cfg.sleepTimeoutSeconds
+                            : 5;
                     }
                 }
             }

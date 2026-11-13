@@ -335,7 +335,12 @@ namespace Glance
         public void AnimateToExpanded()
         {
             if (isExpanded) return;
+            if (isSleeping)
+            {
+                WakeFromSleepMode(false);
+            }
             isExpanded = true;
+            lastMouseMoveUtc = DateTime.UtcNow;
 
             if (clockTimer != null) clockTimer.Interval = TimeSpan.FromMilliseconds(250);
             activeLyricIndex = -1;
@@ -349,6 +354,7 @@ namespace Glance
             }
 
             notchBody.CornerRadius = new CornerRadius(26);
+            notchBody.BeginAnimation(OpacityProperty, new DoubleAnimation(1.0, TimeSpan.FromMilliseconds(150)));
 
             var ease = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.20 };
             Duration dur = new Duration(TimeSpan.FromMilliseconds(290));
@@ -371,6 +377,7 @@ namespace Glance
         {
             if (!isExpanded) return;
             isExpanded = false;
+            lastMouseMoveUtc = DateTime.UtcNow;
 
             if (clockTimer != null)
             {
@@ -728,6 +735,7 @@ namespace Glance
                 collapsedTimeText.Text = timeStr;
                 expandedTimeText.Text = timeStr;
                 if (collapsedMusicTimeText != null) collapsedMusicTimeText.Text = timeStr;
+                if (collapsedSleepTimeText != null) collapsedSleepTimeText.Text = timeStr;
             }
 
             string dateStr = now.ToString("ddd dd MMM yyyy", CultureInfo.InvariantCulture);

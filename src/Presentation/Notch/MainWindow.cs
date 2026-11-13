@@ -84,6 +84,18 @@ namespace Glance
         public bool IsSearchInstalled { get; set; } = true;
         public bool IsSearchEnabled { get; set; } = true;
 
+        // Customizable Sleep / Always-On Display (AOD) Mode when Mouse is Idle
+        private const double SleepCollapsedWidth = 100;
+        private const double SleepCollapsedHeight = 28;
+        public bool EnableSleepMode { get; set; } = true;
+        public int SleepTimeoutSeconds { get; set; } = 5;
+        private bool isSleeping = false;
+        private Grid collapsedSleepLayout;
+        private TextBlock collapsedSleepTimeText;
+        private DispatcherTimer mouseIdleTimer;
+        private NativeMethods.POINT lastMousePt;
+        private DateTime lastMouseMoveUtc = DateTime.UtcNow;
+
         private SolidColorBrush notchBgBrush;
         private static SpotlightWindow spotlightWin;
         private static SettingsWindow activeSettingsWin;
@@ -351,6 +363,8 @@ namespace Glance
                 HotkeyDisplay = PrimaryInstance.HotkeyDisplay;
                 IsSearchInstalled = PrimaryInstance.IsSearchInstalled;
                 IsSearchEnabled = PrimaryInstance.IsSearchEnabled;
+                EnableSleepMode = PrimaryInstance.EnableSleepMode;
+                SleepTimeoutSeconds = PrimaryInstance.SleepTimeoutSeconds;
 
                 notesList = new List<NoteItem>(PrimaryInstance.notesList);
                 clipList = new List<ClipItem>(PrimaryInstance.clipList);
@@ -634,6 +648,12 @@ namespace Glance
                     clockTimer.Start();
                     OnFastTick(null, null);
 
+                    NativeMethods.GetCursorPos(out lastMousePt);
+                    lastMouseMoveUtc = DateTime.UtcNow;
+                    mouseIdleTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(120) };
+                    mouseIdleTimer.Tick += OnMouseIdleTick;
+                    mouseIdleTimer.Start();
+
                     var startupTrimTimer1 = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1500) };
                     startupTrimTimer1.Tick += (s, ev) =>
                     {
@@ -676,7 +696,7 @@ namespace Glance
                     };
                     startupUpdateTimer.Start();
 
-                    var periodicUpdateTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(15.0) };
+                    var periodicUpdateTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(3.0) };
                     periodicUpdateTimer.Tick += (s, ev) =>
                     {
                         CheckForUpdatesInteractive(false);

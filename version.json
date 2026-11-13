@@ -1,7 +1,7 @@
 ﻿{
-    "version":  "1.1.0",
-    "buildNumber":  20261113040654,
-    "publishedAt":  "2026-11-13 11:06:54",
+    "version":  "1.1.1",
+    "buildNumber":  20261113043541,
+    "publishedAt":  "2026-11-13 11:35:41",
     "downloadUrl":  "https://raw.githubusercontent.com/Fyxis/Glance/main/Glance.exe",
-    "releaseNotes":  "Penambahan fitur Auto-Update langsung dari GitHub \u0026 struktur Clean Architecture."
+    "releaseNotes":  "Penambahan fitur Mode Sleep (Always-On Display) saat mouse tidak bergerak selama 5 detik."
 }

@@ -34,6 +34,9 @@ namespace Glance
         public bool isSearchInstalled { get; set; } = true;
         public bool isSearchEnabled { get; set; } = true;
 
+        public bool enableSleepMode { get; set; } = true;
+        public int sleepTimeoutSeconds { get; set; } = 5;
+
         public AppConfig()
         {
             backgroundAlpha = 175;
@@ -59,6 +62,9 @@ namespace Glance
 
             isSearchInstalled = true;
             isSearchEnabled = true;
+
+            enableSleepMode = true;
+            sleepTimeoutSeconds = 5;
         }
     }
 }
