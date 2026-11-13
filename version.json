@@ -1,7 +1,7 @@
 ﻿{
-    "version":  "1.2.2",
-    "buildNumber":  20261113064757,
-    "publishedAt":  "2026-11-13 13:47:57",
+    "version":  "1.2.3",
+    "buildNumber":  20261113074053,
+    "publishedAt":  "2026-11-13 14:40:53",
     "downloadUrl":  "https://raw.githubusercontent.com/Fyxis/Glance/main/Glance.exe",
-    "releaseNotes":  "Build self-contained .NET 8 dengan native WPF libraries tertanam (tanpa wajib install .NET Runtime terpisah di PC pengguna)."
+    "releaseNotes":  "Perbaikan Terminal Launcher di Glance Search: membuka terminal interaktif lebih dulu agar banner Clink/Oh My Posh tampil di atas sebelum mengetikkan perintah."
 }

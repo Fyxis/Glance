@@ -786,21 +786,14 @@ namespace Glance
 
                 if (entry.EntryKind == "terminal")
                 {
-                    var psi = new ProcessStartInfo
-                    {
-                        FileName = entry.LaunchPath,
-                        Arguments = entry.LaunchArguments ?? "",
-                        UseShellExecute = true
-                    };
-                    if (!string.IsNullOrEmpty(entry.WorkingDir) && Directory.Exists(entry.WorkingDir))
-                    {
-                        psi.WorkingDirectory = entry.WorkingDir;
-                    }
-                    if (entry.CommandId == "runas")
-                    {
-                        psi.Verb = "runas";
-                    }
-                    Process.Start(psi);
+                    bool asAdmin = entry.CommandId == "runas";
+                    TerminalLauncher.LaunchAndExecute(
+                        entry.LaunchPath,
+                        entry.WorkingDir,
+                        entry.CopyText,
+                        entry.LaunchArguments,
+                        asAdmin
+                    );
 
                     string preview = entry.CopyText ?? "";
                     if (preview.Length > 14) preview = preview.Substring(0, 14) + "…";

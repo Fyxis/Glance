@@ -218,5 +218,100 @@ namespace Glance
         public const uint SHERB_NOCONFIRMATION = 0x00000001;
         public const uint SHERB_NOPROGRESSUI = 0x00000002;
         public const uint SHERB_NOSOUND = 0x00000004;
+
+        public const uint GENERIC_READ_WRITE = 0xC0000000u;
+        public const uint FILE_SHARE_READ_WRITE = 0x00000003u;
+        public const uint OPEN_EXISTING = 3u;
+        public const ushort KEY_EVENT = 1;
+        public const ushort VK_RETURN = 0x0D;
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool FreeConsole();
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool AttachConsole(int dwProcessId);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        public static extern IntPtr CreateFileW(
+            string lpFileName,
+            uint dwDesiredAccess,
+            uint dwShareMode,
+            IntPtr lpSecurityAttributes,
+            uint dwCreationDisposition,
+            uint dwFlagsAndAttributes,
+            IntPtr hTemplateFile);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool CloseHandle(IntPtr hObject);
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct COORD
+        {
+            public short X;
+            public short Y;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct SMALL_RECT
+        {
+            public short Left;
+            public short Top;
+            public short Right;
+            public short Bottom;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct CONSOLE_SCREEN_BUFFER_INFO
+        {
+            public COORD dwSize;
+            public COORD dwCursorPosition;
+            public ushort wAttributes;
+            public SMALL_RECT srWindow;
+            public COORD dwMaximumWindowSize;
+        }
+
+        [StructLayout(LayoutKind.Explicit, CharSet = CharSet.Unicode)]
+        public struct KEY_EVENT_RECORD
+        {
+            [FieldOffset(0)] public int bKeyDown;
+            [FieldOffset(4)] public ushort wRepeatCount;
+            [FieldOffset(6)] public ushort wVirtualKeyCode;
+            [FieldOffset(8)] public ushort wVirtualScanCode;
+            [FieldOffset(10)] public char UnicodeChar;
+            [FieldOffset(12)] public uint dwControlKeyState;
+        }
+
+        [StructLayout(LayoutKind.Explicit)]
+        public struct INPUT_RECORD
+        {
+            [FieldOffset(0)] public ushort EventType;
+            [FieldOffset(4)] public KEY_EVENT_RECORD KeyEvent;
+        }
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool GetConsoleScreenBufferInfo(
+            IntPtr hConsoleOutput,
+            out CONSOLE_SCREEN_BUFFER_INFO lpConsoleScreenBufferInfo);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool ReadConsoleOutputCharacterW(
+            IntPtr hConsoleOutput,
+            [Out] char[] lpCharacter,
+            uint nLength,
+            COORD dwReadCoord,
+            out uint lpNumberOfCharsRead);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool WriteConsoleInputW(
+            IntPtr hConsoleInput,
+            INPUT_RECORD[] lpBuffer,
+            uint nLength,
+            out uint lpNumberOfEventsWritten);
     }
 }

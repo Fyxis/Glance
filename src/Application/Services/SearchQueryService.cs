@@ -365,11 +365,11 @@ namespace Glance
             {
                 EntryKind = "terminal",
                 Name = $"Run in CMD: {cmdText}",
-                Subtitle = $"Command Prompt • Opens cmd.exe and runs \"{cmdText}\"",
+                Subtitle = $"Command Prompt • Opens interactive cmd.exe and types \"{cmdText}\"",
                 EmojiIcon = "💻",
                 BadgeColorHex = "#10B981",
                 LaunchPath = "cmd.exe",
-                LaunchArguments = "/K " + cmdText,
+                LaunchArguments = "",
                 WorkingDir = userProfile,
                 CopyText = cmdText,
                 ActionHint = "Run CMD ↵"
@@ -380,11 +380,11 @@ namespace Glance
             {
                 EntryKind = "terminal",
                 Name = $"Run in PowerShell: {cmdText}",
-                Subtitle = $"Windows PowerShell • Opens PowerShell and runs \"{cmdText}\"",
+                Subtitle = $"Windows PowerShell • Opens interactive PowerShell and types \"{cmdText}\"",
                 EmojiIcon = "⚡",
                 BadgeColorHex = "#38BDF8",
                 LaunchPath = "powershell.exe",
-                LaunchArguments = $"-NoExit -Command \"{escapedPs}\"",
+                LaunchArguments = "",
                 WorkingDir = userProfile,
                 CopyText = cmdText,
                 ActionHint = "Run PS ↵"
