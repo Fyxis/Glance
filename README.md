@@ -26,6 +26,7 @@ Unlike heavy modern utilities wrapped in Electron or Chromium that devour hundre
   - **Right**: Wi-Fi throughput speed (live Download `↓` & Upload `↑`)
 * **Fluid Expansion**: Expands into an interactive 6-slide control hub on hover or click with custom cubic-bezier spring easing.
 * **Translucent Frosted Glass**: Modern acrylic glass styling with customizable opacity slider in Settings (`⚙️`).
+* **Always-On Display (AOD) Sleep Mode**: When your mouse remains idle for 5 seconds (customizable `2s – 30s`), the notch smoothly shrinks into a minimalist, dimmed (`~42%` opacity) capsule showing only the centered clock (`HH:mm`). Moving the mouse wakes the notch up instantaneously.
 * **Pin Mode**: Lock Glance in expanded view or let it auto-collapse gracefully when your mouse leaves.
 
 ### 🎵 2. Interactive Media Player & Synced Lyrics
@@ -77,11 +78,18 @@ Unlike heavy modern utilities wrapped in Electron or Chromium that devour hundre
     - Pin expanded HUD
     - Display selection (Primary / Secondary / Both)
     - Frosted glass opacity slider
+    - **Notch Sleep Mode (Always-On Display)**: Toggle idle sleep mode ON/OFF and customize the mouse idle timeout (`2 – 30 seconds`, default `5s`).
     - **Global Keyboard Shortcut Recorder**: Record custom key combinations for **Glance Search** with instant live key capture and one-click reset button!
+    - **Glance Auto-Update**: View the currently installed version badge and manually trigger a live GitHub update check anytime.
   - `🎨 Color Palette`: Independent color personalization for each element:
     - Main Accent, Battery, Processor (CPU), Memory (RAM), Storage (Drives), Master Volume, Brightness, and Wi-Fi & Speed meters.
     - Includes **8 instant preset swatches** + **custom HEX color input** + **live color preview**.
   - `📑 Manage Slides`: Select which slides to include or exclude from the notch carousel.
+
+### 🔄 10. Automatic Over-the-Air (OTA) Updates via GitHub
+* **Automatic Background Detection**: Glance checks [`version.json`](version.json) in the GitHub repository automatically on startup and every 3 minutes in the background—no manual button click required.
+* **Update Notification Dialog (`Update` / `Cancel`)**: When a newer release/commit is pushed to GitHub, users automatically receive a modern pop-up notification (*"Versi baru tersedia, klik Update jika ingin update"*) displaying the version transition badge (`v1.1.0 ➔ v1.1.1`) and release notes.
+* **Self-Updating & Auto-Restart**: Clicking **Update** streams the latest `Glance.exe` from GitHub with a real-time progress bar (`0% – 100%`), validates the Windows PE header (`MZ`), overwrites the old executable, and restarts Glance automatically.
 
 ---
 
@@ -148,8 +156,12 @@ Glance can be compiled directly using the **.NET 8 SDK**:
    ```powershell
    powershell -ExecutionPolicy Bypass -File .\build.ps1
    ```
+   *(Optional: specify version and release notes for GitHub Auto-Update)*:
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\build.ps1 -Version "1.2.0" -Notes "New features and bug fixes"
+   ```
 
-The script will build and publish:
+The script automatically updates [`version.json`](version.json), embeds the version manifest, and publishes:
 * `Glance.exe` (Single-file native .NET 8 binary)
 * `GlanceSetup.exe` (Standalone self-contained installer)
 
